@@ -1,0 +1,7 @@
+logLevel: info
+
+webrtc: yes
+rtsp: yes
+
+paths:
+  cam:

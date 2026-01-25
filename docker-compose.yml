@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    ports:
+      - "8889:8889"
+      - "8554:8554"
+      - "8888:8888"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml
+    networks:
+      - rover-net
+
+  virtual-cam:
+    image: lscr.io/linuxserver/ffmpeg:latest
+    container_name: virtual-cam
+    restart: always
+    depends_on:
+      - mediamtx
+    networks:
+      - rover-net
+    entrypoint: >
+      ffmpeg -f lavfi -i testsrc=s=1280x720 
+      -c:v libx264 -preset ultrafast -tune zerolatency 
+      -f rtsp rtsp://mediamtx:8554/cam
+
+  dashboard:
+    image: node:18-slim
+    container_name: rover-dashboard
+    working_dir: /app
+    volumes:
+      - ./dashboard:/app
+    ports:
+      - "3000:3000"
+    command: node server.js
+    networks:
+      - rover-net
+    depends_on:
+      - mediamtx
+
+networks:
+  rover-net:
+    driver: bridge
