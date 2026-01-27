@@ -1,9 +1,23 @@
-# mediamtx.yml (V1.15.x compatible)
+# mediamtx.yml
 
-# Global settings for your paths
 paths:
-  all:
-    source: publisher
+  cam:
+    source: rpiCamera
+    # Corrected field names for MediaMTX V1.x
+    rpiCameraWidth: 1280
+    rpiCameraHeight: 720
+    rpiCameraFPS: 60
+    rpiCameraAfMode: continuous
+    # If the image is upside down (common in rovers), uncomment the next line:
+    # rpiCameraVFlip: yes
+
+    # source: rpiCamera
+    # # This is the maximum stable 'Hardware Encoded' resolution
+    # rpiCameraWidth: 1920
+    # rpiCameraHeight: 1080
+    # rpiCameraFPS: 30
+    # # Increase bitrate for 1080p clarity
+    # rpiCameraBitrate: 6000000
 
 # WebRTC Server settings
 webrtc: yes
@@ -13,11 +27,15 @@ webrtcServerKey: server.key
 webrtcServerCert: server.crt
 webrtcAllowOrigin: '*'
 
-# Instead of webrtcICEUDPMux, the latest version uses these listeners:
+# These replace the old ICEUDP settings
+# UDP is the default and best for RC cars
 webrtcLocalUDPAddress: :8189
-# webrtcLocalTCPAddress: :8189 # Use UDP for RC car driving; TCP adds lag
+# webrtcLocalTCPAddress: :8189 # Leave this commented out for ultra-low latency
 
-# CRITICAL: This helps the browser find the Pi via Tailscale
-webrtcIPsFromInterfaces: no
-# Replace with your actual Pi Tailscale IP
-webrtcAdditionalHosts: [100.109.197.90]
+# Crucial for Tailscale/Remote access
+webrtcIPsFromInterfaces: yes
+webrtcAdditionalHosts: [100.109.197.90] # Your Pi's Tailscale IP
+
+# Added STUN server to help the browser find the Pi
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302

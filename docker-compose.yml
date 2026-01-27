@@ -1,23 +1,24 @@
 services:
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    image: bluenviron/mediamtx:latest-rpi
     container_name: mediamtx
-    # Use 'host' to give the container direct access to the Pi's network
-    network_mode: "host" 
+    network_mode: "host"
+    privileged: true 
+    # Add these specific caps for hardware drivers
+    cap_add:
+      - SYS_RAWIO
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/vchiq:/dev/vchiq
+      - /dev/media0:/dev/media0
+      - /dev/media1:/dev/media1
+      - /dev/media2:/dev/media2
+      - /dev/media3:/dev/media3
+      - /dev/media4:/dev/media4
     volumes:
       - ./mediamtx.yml:/mediamtx.yml
+      - /dev:/dev 
     restart: always
-
-  virtual-cam:
-    image: lscr.io/linuxserver/ffmpeg:latest
-    container_name: virtual-cam
-    network_mode: "host" 
-    restart: always
-    # IMPORTANT: We use 127.0.0.1 because both containers are now on the 'host'
-    entrypoint: >
-      ffmpeg -re -f lavfi -i "testsrc=size=1280x720:rate=30,format=yuv420p" 
-      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p
-      -f rtsp rtsp://127.0.0.1:8554/cam
 
   dashboard:
     image: node:18-slim
