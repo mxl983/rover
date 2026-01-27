@@ -1,7 +1,23 @@
-logLevel: info
+# mediamtx.yml (V1.15.x compatible)
 
-webrtc: yes
-rtsp: yes
-
+# Global settings for your paths
 paths:
-  cam:
+  all:
+    source: publisher
+
+# WebRTC Server settings
+webrtc: yes
+webrtcAddress: :8889
+webrtcEncryption: no
+webrtcServerKey: server.key
+webrtcServerCert: server.crt
+webrtcAllowOrigin: '*'
+
+# Instead of webrtcICEUDPMux, the latest version uses these listeners:
+webrtcLocalUDPAddress: :8189
+# webrtcLocalTCPAddress: :8189 # Use UDP for RC car driving; TCP adds lag
+
+# CRITICAL: This helps the browser find the Pi via Tailscale
+webrtcIPsFromInterfaces: no
+# Replace with your actual Pi Tailscale IP
+webrtcAdditionalHosts: [100.109.197.90]
