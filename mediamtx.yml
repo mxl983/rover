@@ -25,7 +25,7 @@ webrtcAddress: :8889
 webrtcEncryption: no
 webrtcServerKey: server.key
 webrtcServerCert: server.crt
-webrtcAllowOrigin: '*'
+webrtcAllowOrigins: ['*']
 
 # These replace the old ICEUDP settings
 # UDP is the default and best for RC cars

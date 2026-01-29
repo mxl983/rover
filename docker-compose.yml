@@ -20,12 +20,20 @@ services:
       - /dev:/dev 
     restart: always
 
-  dashboard:
+  control_server:
     image: node:18-slim
-    container_name: rover-dashboard
+    container_name: control_server
     working_dir: /app
+    privileged: true
     volumes:
-      - ./dashboard:/app
+      - ./server:/app
+      # Map the Pi's hardware tools into the container
+      - /usr/bin/vcgencmd:/usr/bin/vcgencmd
+      - /usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0:/usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0
+      - /usr/lib/arm-linux-gnueabihf/libvcos.so.0:/usr/lib/arm-linux-gnueabihf/libvcos.so.0
+    # Give the container permission to touch the hardware
+    devices:
+      - /dev/vchiq:/dev/vchiq
     ports:
       - "3000:3000"
     command: npm start
