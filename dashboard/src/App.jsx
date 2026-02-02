@@ -1,27 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import { VideoStream } from "./components/VideoStream";
+import { SubsystemItem } from "./components/SubSystemItem";
+import { Meters } from "./components/Meters";
+import { ControlCluster } from "./components/ControlCluster";
 
 const PI_IP = "rover.tail9d0237.ts.net";
 
 export default function App() {
-  const videoRef = useRef(null);
   const socketRef = useRef(null);
 
-  const [clock, setClock] = useState("00:00:00");
   const [latency, setLatency] = useState(0);
   const [pan, setPan] = useState(0);
+  const [stats, setStats] = useState({});
 
   const PAN_STEP = 5;
   const MAX_PAN = 90;
   let pingStart = useRef(0);
-
-  /* Clock */
-  useEffect(() => {
-    const t = setInterval(
-      () => setClock(new Date().toLocaleTimeString()),
-      1000
-    );
-    return () => clearInterval(t);
-  }, []);
 
   /* WebSocket */
   useEffect(() => {
@@ -31,7 +25,15 @@ export default function App() {
     socket.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type === "PONG") {
-        setLatency(Date.now() - pingStart.current);
+        setStats((prev) => ({
+          ...prev,
+          latency: Date.now() - pingStart.current,
+        }));
+      } else {
+        setStats((prev) => ({
+          ...prev,
+          ...(data?.data || {}),
+        }));
       }
     };
 
@@ -46,40 +48,12 @@ export default function App() {
     };
   }, []);
 
-  /* WebRTC */
-  useEffect(() => {
-    async function startWebRTC() {
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-      });
-
-      pc.addTransceiver("video", { direction: "recvonly" });
-      pc.ontrack = (e) => (videoRef.current.srcObject = e.streams[0]);
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const res = await fetch(`http://${PI_IP}:8889/cam/whep`, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp" },
-        body: pc.localDescription.sdp,
-      });
-
-      const answer = await res.text();
-      await pc.setRemoteDescription({ type: "answer", sdp: answer });
-    }
-
-    startWebRTC();
-  }, []);
-
   /* Drive */
   const drive = (dir) => {
     fetch(`http://${PI_IP}:3000/api/control/${dir}`, { method: "POST" });
 
-    if (dir === "left")
-      setPan((p) => Math.max(p - PAN_STEP, -MAX_PAN));
-    if (dir === "right")
-      setPan((p) => Math.min(p + PAN_STEP, MAX_PAN));
+    if (dir === "left") setPan((p) => Math.max(p - PAN_STEP, -MAX_PAN));
+    if (dir === "right") setPan((p) => Math.min(p + PAN_STEP, MAX_PAN));
   };
 
   const stop = () =>
@@ -87,39 +61,51 @@ export default function App() {
 
   return (
     <div className="viewport">
-      <video ref={videoRef} autoPlay muted playsInline id="videoPlayer" />
+      <VideoStream />
 
       <div className="hud-overlay">
         <div className="hud-header">
           <div className="glass-card">Mango Rover V1.0</div>
           <div className="glass-card">
-            CAM_01 // {clock}
+            CAM_01 // {new Date().toLocaleTimeString()}
+          </div>
+        </div>
+
+        <div className="hud-left">
+          <div className="glass-card-metrics">
+            <div className="card-title">SUBSYSTEM_CHECK</div>
+            <SubsystemItem
+              label="CAM_UNIT"
+              status={stats?.camera?.status}
+              dotColor={stats?.camera?.dot}
+              statusColor={stats?.camera?.color}
+            />
+
+            <SubsystemItem
+              label="DRIVE_SYS"
+              status={stats?.motors?.status}
+              dotColor={stats?.motors?.dot}
+              statusColor={stats?.motors?.color}
+            />
+
+            <SubsystemItem
+              label="ESP_LINK"
+              status={stats?.esp32?.status}
+              dotColor={stats?.esp32?.dot}
+              statusColor={stats?.esp32?.color}
+            />
           </div>
         </div>
 
         <div className="hud-footer">
-          <div className="glass-card">
-            SIG <span>98%</span> | PWR <span>12.4V</span> | DLAY{" "}
-            <span>{latency}ms</span>
+          <div className="drive-control-monitor glass-card">
+            <Meters stats={stats} />
           </div>
 
-          <div className="control-cluster">
-            {["up", "left", "down", "right"].map((d) => (
-              <button
-                key={d}
-                onMouseDown={() => drive(d)}
-                onMouseUp={stop}
-              >
-                {d.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          <ControlCluster />
         </div>
 
-        <div
-          id="cameraGroup"
-          style={{ transform: `rotate(${pan}deg)` }}
-        />
+        {/* <div id="cameraGroup" style={{ transform: `rotate(${pan}deg)` }} /> */}
       </div>
     </div>
   );

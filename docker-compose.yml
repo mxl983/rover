@@ -3,7 +3,7 @@ services:
     image: bluenviron/mediamtx:latest-rpi
     container_name: mediamtx
     network_mode: "host"
-    privileged: true 
+    privileged: true
     # Add these specific caps for hardware drivers
     cap_add:
       - SYS_RAWIO
@@ -17,7 +17,7 @@ services:
       - /dev/media4:/dev/media4
     volumes:
       - ./mediamtx.yml:/mediamtx.yml
-      - /dev:/dev 
+      - /dev:/dev
     restart: always
 
   control_server:
@@ -25,8 +25,12 @@ services:
     container_name: control_server
     working_dir: /app
     privileged: true
+    user: "root" # Crucial for vcgencmd access
+    group_add:
+      - video # Gives access to hardware sensors
     volumes:
       - ./server:/app
+      - /sys:/sys:ro
       # Map the Pi's hardware tools into the container
       - /usr/bin/vcgencmd:/usr/bin/vcgencmd
       - /usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0:/usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0
