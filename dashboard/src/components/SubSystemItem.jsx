@@ -3,11 +3,9 @@ import React from "react";
 /**
  * SubsystemItem Component
  * @param {string} label - The name of the subsystem (e.g., "CAM_UNIT")
- * @param {string} status - Current status text (e.g., "OFFLINE" or "ONLINE")
  * @param {string} dotColor - The class name for the dot color ('red', 'green', or 'yellow')
- * @param {string} statusColor - Hex code or CSS color for the status text
  */
-export const SubsystemItem = ({ label, status, dotColor, statusColor }) => {
+export const SubsystemItem = ({ label, dotColor }) => {
   return (
     <div className="subsystem-item">
       {/* Dynamic class for the status dot */}
@@ -20,7 +18,7 @@ export const SubsystemItem = ({ label, status, dotColor, statusColor }) => {
           justifyContent: "space-between",
         }}
       >
-        {label} <span style={{ color: statusColor }}>{status}</span>
+        {label}
       </div>
     </div>
   );

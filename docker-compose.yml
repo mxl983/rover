@@ -21,7 +21,7 @@ services:
     restart: always
 
   control_server:
-    image: node:18-slim
+    build: .
     container_name: control_server
     working_dir: /app
     privileged: true
@@ -38,6 +38,7 @@ services:
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq
+      - /dev/i2c-1:/dev/i2c-1
     ports:
       - "3000:3000"
     command: npm start

@@ -22,7 +22,7 @@ export const Meters = ({ stats }) => {
           DIST <span>20M</span>
         </div>
         <div className="stat">
-          TEMP <span>{stats.cpuTemp || "-"}</span>
+          TEMP <span>{stats.cpuTemp || "-"}°C</span>
         </div>
         <div className="stat">
           CPU <span id="lat">{stats.cpuLoad || "-"}%</span>

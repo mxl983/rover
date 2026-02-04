@@ -4,7 +4,8 @@ import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
 import { ControlCluster } from "./components/ControlCluster";
 
-const PI_IP = "rover.tail9d0237.ts.net";
+const PI_HOST = "rover.tail9d0237.ts.net";
+const CAMERA_URL = "http://rover.tail9d0237.ts.net:8889/cam/";
 
 export default function App() {
   const socketRef = useRef(null);
@@ -13,13 +14,15 @@ export default function App() {
   const [pan, setPan] = useState(0);
   const [stats, setStats] = useState({});
 
+  const [piOnline, setPiOnline] = useState(false);
+
   const PAN_STEP = 5;
   const MAX_PAN = 90;
   let pingStart = useRef(0);
 
-  /* WebSocket */
+  /* Ping Loop */
   useEffect(() => {
-    const socket = new WebSocket(`ws://${PI_IP}:3000`);
+    const socket = new WebSocket(`ws://${PI_HOST}:3000`);
     socketRef.current = socket;
 
     socket.onmessage = (e) => {
@@ -37,10 +40,15 @@ export default function App() {
       }
     };
 
-    const pingInterval = setInterval(() => {
+    const pingCheckFn = () => {
+      let heartBeatGap = Date.now() - pingStart.current;
       pingStart.current = Date.now();
       socket.send(JSON.stringify({ type: "PING" }));
-    }, 3000);
+      setPiOnline(heartBeatGap < 5000);
+    };
+
+    // pingCheckFn();
+    const pingInterval = setInterval(pingCheckFn, 3000);
 
     return () => {
       clearInterval(pingInterval);
@@ -49,15 +57,24 @@ export default function App() {
   }, []);
 
   /* Drive */
-  const drive = (dir) => {
-    fetch(`http://${PI_IP}:3000/api/control/${dir}`, { method: "POST" });
+  const handleDriveUpdate = async (keysArray) => {
+    try {
+      const response = await fetch(`http://${PI_HOST}:3000/api/control/drive`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // We send the array of currently active keys
+        body: JSON.stringify({ keys: keysArray }),
+      });
 
-    if (dir === "left") setPan((p) => Math.max(p - PAN_STEP, -MAX_PAN));
-    if (dir === "right") setPan((p) => Math.min(p + PAN_STEP, MAX_PAN));
+      if (!response.ok) {
+        console.warn("Server responded with an error");
+      }
+    } catch (error) {
+      console.error("Network error sending drive command:", error);
+    }
   };
-
-  const stop = () =>
-    fetch(`http://${PI_IP}:3000/api/control/stop`, { method: "POST" });
 
   return (
     <div className="viewport">
@@ -75,24 +92,8 @@ export default function App() {
           <div className="glass-card-metrics">
             <div className="card-title">SUBSYSTEM_CHECK</div>
             <SubsystemItem
-              label="CAM_UNIT"
-              status={stats?.camera?.status}
-              dotColor={stats?.camera?.dot}
-              statusColor={stats?.camera?.color}
-            />
-
-            <SubsystemItem
-              label="DRIVE_SYS"
-              status={stats?.motors?.status}
-              dotColor={stats?.motors?.dot}
-              statusColor={stats?.motors?.color}
-            />
-
-            <SubsystemItem
-              label="ESP_LINK"
-              status={stats?.esp32?.status}
-              dotColor={stats?.esp32?.dot}
-              statusColor={stats?.esp32?.color}
+              label="PI_SERVER"
+              dotColor={piOnline ? "green" : "red"}
             />
           </div>
         </div>
@@ -102,10 +103,8 @@ export default function App() {
             <Meters stats={stats} />
           </div>
 
-          <ControlCluster />
+          <ControlCluster onDrive={handleDriveUpdate} />
         </div>
-
-        {/* <div id="cameraGroup" style={{ transform: `rotate(${pan}deg)` }} /> */}
       </div>
     </div>
   );

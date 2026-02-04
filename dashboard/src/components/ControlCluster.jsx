@@ -1,14 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
-/**
- * ControlCluster Component
- * @param {Function} onDrive - Callback when a direction is triggered (e.g., 'W', 'A', 'S', 'D')
- * @param {Function} onStop - Callback when movement should stop
- */
-export const ControlCluster = ({ onDrive, onStop }) => {
+export const ControlCluster = ({ onDrive }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
+  // Use a ref to track the previous state to avoid redundant network calls
+  const prevKeysRef = useRef("");
 
-  // Map keys to their display labels
   const controlMap = [
     { key: null, label: "" },
     { key: "w", label: "W" },
@@ -18,15 +14,33 @@ export const ControlCluster = ({ onDrive, onStop }) => {
     { key: "d", label: "D" },
   ];
 
+  // Unified function to sync state to the backend
+  const syncState = useCallback(
+    (nextKeys) => {
+      const keysArray = Array.from(nextKeys).sort();
+      const keysString = keysArray.join("");
+
+      // Only send if the combination of keys has actually changed
+      if (keysString !== prevKeysRef.current) {
+        onDrive(keysArray);
+        prevKeysRef.current = keysString;
+      }
+    },
+    [onDrive],
+  );
+
   const handleKeyDown = useCallback(
     (e) => {
       const key = e.key.toLowerCase();
       if (["w", "a", "s", "d"].includes(key)) {
-        setActiveKeys((prev) => new Set(prev).add(key));
-        onDrive(key.toUpperCase());
+        setActiveKeys((prev) => {
+          const next = new Set(prev).add(key);
+          syncState(next);
+          return next;
+        });
       }
     },
-    [onDrive],
+    [syncState],
   );
 
   const handleKeyUp = useCallback(
@@ -36,12 +50,12 @@ export const ControlCluster = ({ onDrive, onStop }) => {
         setActiveKeys((prev) => {
           const next = new Set(prev);
           next.delete(key);
+          syncState(next);
           return next;
         });
-        onStop();
       }
     },
-    [onStop],
+    [syncState],
   );
 
   useEffect(() => {
@@ -56,32 +70,14 @@ export const ControlCluster = ({ onDrive, onStop }) => {
   return (
     <div className="control-cluster">
       <style>{`
-        .wasd-controls {
-          display: grid;
-          grid-template-columns: repeat(3, 45px);
-          gap: 5px;
-        }
+        .wasd-controls { display: grid; grid-template-columns: repeat(3, 45px); gap: 5px; }
         .control-btn {
-          width: 45px;
-          height: 45px;
-          background: rgba(0, 0, 0, 0.6);
-          color: #00f2ff;
-          border: 1px solid #00f2ff;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-          transition: all 0.1s ease;
-          outline: none;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-transform: uppercase;
+          width: 45px; height: 45px; background: rgba(0, 0, 0, 0.6); color: #00f2ff;
+          border: 1px solid #00f2ff; border-radius: 4px; cursor: pointer; font-weight: bold;
+          transition: all 0.1s ease; display: flex; align-items: center; justify-content: center;
         }
         .control-btn.active {
-          background: #00f2ff;
-          color: #000;
-          box-shadow: 0 0 30px #00f2ff, 0 0 10px #fff;
-          transform: scale(0.95);
+          background: #00f2ff; color: #000; box-shadow: 0 0 20px #00f2ff; transform: scale(0.95);
         }
       `}</style>
 
@@ -94,26 +90,15 @@ export const ControlCluster = ({ onDrive, onStop }) => {
               key={index}
               className={`control-btn ${activeKeys.has(item.key) ? "active" : ""}`}
               onMouseDown={() => {
-                setActiveKeys((prev) => new Set(prev).add(item.key));
-                onDrive(item.label);
+                const next = new Set(activeKeys).add(item.key);
+                setActiveKeys(next);
+                syncState(next);
               }}
               onMouseUp={() => {
-                setActiveKeys((prev) => {
-                  const next = new Set(prev);
-                  next.delete(item.key);
-                  return next;
-                });
-                onStop();
-              }}
-              onMouseLeave={() => {
-                if (activeKeys.has(item.key)) {
-                  setActiveKeys((prev) => {
-                    const next = new Set(prev);
-                    next.delete(item.key);
-                    return next;
-                  });
-                  onStop();
-                }
+                const next = new Set(activeKeys);
+                next.delete(item.key);
+                setActiveKeys(next);
+                syncState(next);
               }}
             >
               {item.label}
