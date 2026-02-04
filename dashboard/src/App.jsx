@@ -27,24 +27,28 @@ export default function App() {
 
     socket.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      if (data.type === "PONG") {
-        setStats((prev) => ({
-          ...prev,
-          latency: Date.now() - pingStart.current,
-        }));
-      } else {
-        setStats((prev) => ({
-          ...prev,
-          ...(data?.data || {}),
-        }));
+      switch (data.type) {
+        // Heart Beat
+        case "PONG":
+          let heartBeatGap = Date.now() - pingStart.current;
+          pingStart.current = Date.now();
+          setPiOnline(heartBeatGap < 5000);
+          setStats((prev) => ({
+            ...prev,
+            latency: Date.now() - pingStart.current,
+          }));
+          break;
+        default:
+          setStats((prev) => ({
+            ...prev,
+            ...(data?.data || {}),
+          }));
+          break;
       }
     };
 
     const pingCheckFn = () => {
-      let heartBeatGap = Date.now() - pingStart.current;
-      pingStart.current = Date.now();
       socket.send(JSON.stringify({ type: "PING" }));
-      setPiOnline(heartBeatGap < 5000);
     };
 
     // pingCheckFn();
