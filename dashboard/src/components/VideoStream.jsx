@@ -144,9 +144,9 @@ export const VideoStream = () => {
 
             {/* Left Fancy Line */}
             <line
-              x1="55.5"
+              x1="54.5"
               y1="90"
-              x2="73"
+              x2="70"
               y2="45"
               stroke="#00f2ff"
               strokeWidth="0.8"
@@ -157,9 +157,9 @@ export const VideoStream = () => {
 
             {/* Right Fancy Line (Symmetrical) */}
             <line
-              x1="119"
+              x1="115"
               y1="90"
-              x2="89"
+              x2="85"
               y2="45"
               stroke="#00f2ff"
               strokeWidth="0.8"
