@@ -247,7 +247,6 @@ button:active {
 .card-title {
   font-size: 9px;
   opacity: 0.6;
-  margin-bottom: 10px;
 }
 
 .stat-label {
@@ -284,4 +283,37 @@ button:active {
   gap: 15px;
   border-left: 3px solid var(--spacex-cyan);
   min-width: 280px;
+}
+
+/* Add this to your CSS file */
+.capture-btn {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.shutter-active {
+  background-color: #ff4444 !important; /* Red for recording/photo */
+  animation: pulse 1.5s infinite;
+  opacity: 0.8;
+}
+
+.capture-btn-circle {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  align-content: center;
+  flex-wrap: nowrap;
+  flex-direction: column;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
 }

@@ -19,7 +19,7 @@ export const Meters = ({ stats }) => {
       </div>
       <div className="meter-row">
         <div className="stat">
-          DIST <span>20M</span>
+          DIST <span>0M</span>
         </div>
         <div className="stat">
           TEMP <span>{stats.cpuTemp || "-"}°C</span>

@@ -3,64 +3,80 @@ import { VideoStream } from "./components/VideoStream";
 import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
 import { ControlCluster } from "./components/ControlCluster";
+import { CaptureButton } from "./components/CaptureButton";
 
 const PI_HOST = "rover.tail9d0237.ts.net";
-const CAMERA_URL = "http://rover.tail9d0237.ts.net:8889/cam/";
 
 export default function App() {
   const socketRef = useRef(null);
-
-  const [latency, setLatency] = useState(0);
-  const [pan, setPan] = useState(0);
   const [stats, setStats] = useState({});
-
   const [piOnline, setPiOnline] = useState(false);
 
-  const PAN_STEP = 5;
-  const MAX_PAN = 90;
-  let pingStart = useRef(0);
+  let lastPingTime = useRef(0);
+  let lastHeartBeat = useRef(0);
 
-  /* Ping Loop */
   useEffect(() => {
-    const socket = new WebSocket(`ws://${PI_HOST}:3000`);
-    socketRef.current = socket;
+    let socket;
+    let reconnectTimeout;
 
-    socket.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      switch (data.type) {
-        // Heart Beat
-        case "PONG":
-          let heartBeatGap = Date.now() - pingStart.current;
-          pingStart.current = Date.now();
-          setPiOnline(heartBeatGap < 5000);
+    const connect = () => {
+      console.log("🛰️ Attempting WebSocket uplink...");
+      socket = new WebSocket(`ws://${PI_HOST}:3000`);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        console.log("✅ Uplink established");
+        setPiOnline(true);
+      };
+
+      socket.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === "PONG") {
+          lastHeartBeat.current = Date.now();
+          setPiOnline(true);
           setStats((prev) => ({
             ...prev,
-            latency: Date.now() - pingStart.current,
+            latency: Date.now() - lastPingTime.current,
           }));
-          break;
-        default:
-          setStats((prev) => ({
-            ...prev,
-            ...(data?.data || {}),
-          }));
-          break;
+        } else {
+          setStats((prev) => ({ ...prev, ...(data?.data || {}) }));
+        }
+      };
+
+      socket.onclose = () => {
+        console.warn("❌ Uplink severed. Retrying in 3s...");
+        setPiOnline(false);
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
+
+      socket.onerror = (err) => {
+        console.error("Socket Error:", err);
+        socket.close();
+      };
+    };
+
+    connect();
+
+    const pingInterval = setInterval(() => {
+      // Only ping if the socket is actually open
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        lastPingTime.current = Date.now();
+        socket.send(JSON.stringify({ type: "PING" }));
       }
-    };
 
-    const pingCheckFn = () => {
-      socket.send(JSON.stringify({ type: "PING" }));
-    };
-
-    // pingCheckFn();
-    const pingInterval = setInterval(pingCheckFn, 3000);
+      // Secondary safety: check heartbeat gap
+      if (Date.now() - lastHeartBeat.current > 5000) {
+        setPiOnline(false);
+      }
+    }, 3000);
 
     return () => {
       clearInterval(pingInterval);
+      clearTimeout(reconnectTimeout);
       socket.close();
     };
   }, []);
 
-  /* Drive */
   const handleDriveUpdate = async (keysArray) => {
     try {
       const response = await fetch(`http://${PI_HOST}:3000/api/control/drive`, {
@@ -68,7 +84,6 @@ export default function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        // We send the array of currently active keys
         body: JSON.stringify({ keys: keysArray }),
       });
 
@@ -88,26 +103,30 @@ export default function App() {
         <div className="hud-header">
           <div className="glass-card">Mango Rover V1.0</div>
           <div className="glass-card">
-            CAM_01 // {new Date().toLocaleTimeString()}
-          </div>
-        </div>
-
-        <div className="hud-left">
-          <div className="glass-card-metrics">
-            <div className="card-title">SUBSYSTEM_CHECK</div>
-            <SubsystemItem
-              label="PI_SERVER"
-              dotColor={piOnline ? "green" : "red"}
-            />
+            IMX708 // {new Date().toLocaleTimeString()}
           </div>
         </div>
 
         <div className="hud-footer">
           <div className="drive-control-monitor glass-card">
+            {/* <div className="card-title">SUBSYSTEM_CHECK</div> */}
+            <SubsystemItem
+              label="PI_SERVER"
+              dotColor={piOnline ? "green" : "red"}
+            />
             <Meters stats={stats} />
           </div>
 
-          <ControlCluster onDrive={handleDriveUpdate} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "20px",
+            }}
+          >
+            <ControlCluster onDrive={handleDriveUpdate} />
+            <CaptureButton></CaptureButton>
+          </div>
         </div>
       </div>
     </div>

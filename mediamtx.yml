@@ -3,21 +3,39 @@
 paths:
   cam:
     source: rpiCamera
-    # Corrected field names for MediaMTX V1.x
+    # Use 2304x1728 for the widest possible 4:3 "un-cropped" view
+    # Or 1536x1152 for a good balance of FOV and performance
+    # rpiCameraWidth: 1280
+    # rpiCameraHeight: 720
+    # rpiCameraFPS: 60
+    # Module 3 is very sharp; this helps with high-speed rover movement
+    # rpiCameraBitrate: 4000000
+
+    # 720p
     rpiCameraWidth: 1280
     rpiCameraHeight: 720
     rpiCameraFPS: 60
-    rpiCameraAfMode: continuous
-    # If the image is upside down (common in rovers), uncomment the next line:
-    # rpiCameraVFlip: yes
+    # rpiCameraAfMode: continuous
+    # rpiCameraAfRange: normal
+    # # For driving, 'manual' with LensPosition 0.0 (infinity) is often more stable
+    rpiCameraAfMode: manual
+    rpiCameraLensPosition: 0.0
 
-    # source: rpiCamera
-    # # This is the maximum stable 'Hardware Encoded' resolution
+    # 1080p
     # rpiCameraWidth: 1920
     # rpiCameraHeight: 1080
     # rpiCameraFPS: 30
-    # # Increase bitrate for 1080p clarity
+    # rpiCameraAfMode: continuous
     # rpiCameraBitrate: 6000000
+
+    # 4K
+    # rpiCameraWidth: 4608
+    # rpiCameraHeight: 2592
+    # rpiCameraFPS: 30
+    # rpiCameraAfMode: continuous
+    # rpiCameraBitrate: 6000000
+    # If the image is upside down (common in rovers), uncomment the next line:
+    # rpiCameraVFlip: yes
 
 # WebRTC Server settings
 webrtc: yes
@@ -25,7 +43,7 @@ webrtcAddress: :8889
 webrtcEncryption: no
 webrtcServerKey: server.key
 webrtcServerCert: server.crt
-webrtcAllowOrigins: ['*']
+webrtcAllowOrigins: ["*"]
 
 # These replace the old ICEUDP settings
 # UDP is the default and best for RC cars

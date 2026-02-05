@@ -29,16 +29,20 @@ services:
     group_add:
       - video # Gives access to hardware sensors
     volumes:
-      - ./server:/app
-      - /sys:/sys:ro
-      # Map the Pi's hardware tools into the container
-      - /usr/bin/vcgencmd:/usr/bin/vcgencmd
-      - /usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0:/usr/lib/arm-linux-gnueabihf/libvchiq_arm.so.0
-      - /usr/lib/arm-linux-gnueabihf/libvcos.so.0:/usr/lib/arm-linux-gnueabihf/libvcos.so.0
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/shm:/dev/shm
+      - /run/udev:/run/udev:ro
+      - /dev/dma_heap:/dev/dma_heap
+      - ./photos:/app/photos
+      - /var/run/docker.sock:/var/run/docker.sock
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq
       - /dev/i2c-1:/dev/i2c-1
+      - "/dev/video0:/dev/video0"
+      - "/dev/v4l-subdev0:/dev/v4l-subdev0"
+      - "/dev/v4l-subdev1:/dev/v4l-subdev1"
+      - /dev/media0:/dev/media0
     ports:
       - "3000:3000"
     command: npm start

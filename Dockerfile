@@ -1,19 +1,21 @@
-FROM node:18-slim
+FROM balenalib/raspberrypi3-node:18-bookworm-run
 
-# Install Python and I2C dependencies
-RUN apt-get update && apt-get install -y \
+# Install the correct Bookworm packages
+RUN install_packages \
     python3 \
     python3-smbus \
     i2c-tools \
-    && rm -rf /var/lib/apt/lists/*
+    libcamera-apps-lite \
+    docker.io
 
 WORKDIR /app
 
-# Copy from the server subfolder into the container's /app
 COPY server/package*.json ./
 RUN npm install
 
-# Copy the rest of the server code (including the driver folder)
 COPY server/ .
+
+# Ensure photos directory is ready
+RUN mkdir -p /app/photos && chmod 777 /app/photos
 
 CMD ["npm", "start"]

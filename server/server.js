@@ -5,6 +5,14 @@ import { WebSocketServer, WebSocket } from "ws";
 import { getCpuTemp, getBattery, getCpuLoad } from "./utils/sysUtils.js"; // Note the .js extension
 import { PythonShell } from "python-shell";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import { exec } from "child_process";
+import util from "util";
+
+// Reconstruct __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let options = {
   mode: "text",
@@ -41,12 +49,53 @@ app.use(
   }),
 );
 
+const execPromise = util.promisify(exec);
+
+app.post("/api/camera/capture", async (req, res) => {
+  const fileName = `capture_${Date.now()}.jpg`;
+  const filePath = `/app/photos/${fileName}`;
+
+  try {
+    console.log("📸 Blinking: Stopping video stream...");
+    // 1. Pause the MediaMTX container
+    await execPromise("DOCKER_API_VERSION=1.44 docker stop mediamtx");
+
+    console.log("🔭 Taking 4K High-Res Photo...");
+    // 2. Capture the high-res photo
+    // -n: no preview, --immediate: don't wait for focus/exposure circles
+    await execPromise(
+      `rpicam-still -n -o "${filePath}" --width 4056 --height 3040 --immediate --flush`,
+    );
+
+    console.log("✅ Photo saved. Restarting stream...");
+
+    const photoUrl = `${req.protocol}://${req.get("host")}/photos/${fileName}`;
+
+    res.json({
+      status: "success",
+      url: photoUrl,
+      filename: fileName,
+    });
+  } catch (error) {
+    console.error("Capture Error:", error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    // 3. Always restart the stream, even if the photo fails
+    exec("DOCKER_API_VERSION=1.44 docker start mediamtx", (err) => {
+      if (err) console.error("Failed to restart MediaMTX:", err);
+      else console.log("▶️ Stream resumed.");
+    });
+  }
+});
+
+// Make sure your photos folder is served statically so you can view them
+app.use("/photos", express.static(path.join(__dirname, "photos")));
+
 app.post("/api/control/drive", (req, res) => {
   const { keys } = req.body;
 
   // Send the array of keys (e.g., ["w", "d"]) to the Python script via stdin
   if (pyShell) {
-    console.log("Py shell ready");
     pyShell.send(JSON.stringify(keys));
   } else {
     console.log("No shell!!");

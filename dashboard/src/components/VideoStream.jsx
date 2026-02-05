@@ -4,41 +4,70 @@ const SERVER_IP = "rover.tail9d0237.ts.net";
 
 export const VideoStream = () => {
   const videoRef = useRef(null);
+  const pcRef = useRef(null); // Keep a reference to the peer connection
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function startWebRTC() {
-      try {
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        });
-
-        pc.addTransceiver("video", { direction: "recvonly" });
-
-        pc.ontrack = (e) => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = e.streams[0];
-            videoRef.current.onloadedmetadata = () => setIsLoading(false);
-          }
-        };
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        const res = await fetch(`http://${SERVER_IP}:8889/cam/whep`, {
-          method: "POST",
-          headers: { "Content-Type": "application/sdp" },
-          body: pc.localDescription.sdp,
-        });
-
-        const answer = await res.text();
-        await pc.setRemoteDescription({ type: "answer", sdp: answer });
-      } catch (err) {
-        console.error("WebRTC Error:", err);
-      }
+  const startWebRTC = async () => {
+    // 1. Clean up existing connection if it exists
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
     }
 
+    setIsLoading(true);
+    console.log("🛰️ Attempting to link satellite...");
+
+    try {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+      pcRef.current = pc;
+
+      // 2. MONITOR FOR FAILURE
+      pc.onconnectionstatechange = () => {
+        if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+          console.log("❌ Link lost. Retrying in 5s...");
+          setIsLoading(true);
+
+          // Wait 5 seconds and try a fresh handshake
+          setTimeout(startWebRTC, 5000);
+        }
+      };
+
+      pc.addTransceiver("video", { direction: "recvonly" });
+
+      pc.ontrack = (e) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = e.streams[0];
+          videoRef.current.play().catch(() => {});
+          videoRef.current.onloadedmetadata = () => setIsLoading(false);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const res = await fetch(`http://${SERVER_IP}:8889/cam/whep`, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: pc.localDescription.sdp,
+      });
+
+      if (!res.ok) throw new Error("Server offline");
+
+      const answer = await res.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answer });
+    } catch (err) {
+      console.error("📡 Signal Error:", err.message);
+      setIsLoading(true);
+      // If the fetch fails (server down), try again in 5s
+      setTimeout(startWebRTC, 5000);
+    }
+  };
+
+  useEffect(() => {
     startWebRTC();
+    return () => pcRef.current?.close();
   }, []);
 
   return (
@@ -54,7 +83,6 @@ export const VideoStream = () => {
     >
       {isLoading && (
         <div className="video-loader">
-          {/* Animated Hexagon SVG */}
           <div className="hex-container">
             <svg viewBox="0 0 100 100" className="hex-svg">
               <polygon
@@ -64,89 +92,92 @@ export const VideoStream = () => {
                 strokeWidth="2"
               />
             </svg>
-            <div className="hex-inner"></div>
           </div>
           <div className="loading-text">LINKING_SATELLITE...</div>
         </div>
       )}
 
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        id="videoPlayer"
+      <div
         style={{
+          position: "relative", // Essential for absolute children
           width: "100%",
           height: "100%",
-          objectFit: "cover",
           opacity: isLoading ? 0 : 1,
-          transition: "opacity 1.5s ease",
+          transition: "opacity 1s ease",
+          overflow: "hidden",
+          aspectRatio: "16 / 9", // Force the container to match the 720p stream
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+          }}
+        />
+
+        {/* Drive assist HUD */}
+        {!isLoading && (
+          <svg
+            viewBox="0 0 160 90"
+            style={{
+              zIndex: 10,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+            }}
+          >
+            <defs>
+              /* 1. This creates the "Neon Glow" effect */
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="0.8" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* Left Fancy Line */}
+            <line
+              x1="55.5"
+              y1="90"
+              x2="73"
+              y2="45"
+              stroke="#00f2ff"
+              strokeWidth="0.8"
+              strokeDasharray="4, 2"
+              filter="url(#glow)"
+              opacity="0.2"
+            />
+
+            {/* Right Fancy Line (Symmetrical) */}
+            <line
+              x1="119"
+              y1="90"
+              x2="89"
+              y2="45"
+              stroke="#00f2ff"
+              strokeWidth="0.8"
+              strokeDasharray="4, 2"
+              filter="url(#glow)"
+              opacity="0.2"
+            />
+          </svg>
+        )}
+      </div>
 
       <style>{`
-        .video-loader {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          z-index: 5;
-          background: radial-gradient(circle, #0a0a0a 0%, #000 100%);
-        }
-
-        .hex-container {
-          position: relative;
-          width: 80px;
-          height: 80px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .hex-svg {
-          width: 100%;
-          height: 100%;
-          animation: hex-rotate 4s linear infinite;
-          filter: drop-shadow(0 0 8px #00f2ff);
-        }
-
-        .hex-inner {
-          position: absolute;
-          width: 20px;
-          height: 20px;
-          background: #00f2ff;
-          clip-path: polygon(50% 0%, 90% 25%, 90% 75%, 50% 100%, 10% 75%, 10% 25%);
-          animation: hex-pulse 1.5s ease-in-out infinite;
-        }
-
-        .loading-text {
-          margin-top: 24px;
-          color: #00f2ff;
-          font-family: 'Segoe UI', monospace;
-          font-size: 11px;
-          letter-spacing: 4px;
-          text-transform: uppercase;
-          text-shadow: 0 0 10px #00f2ff;
-          animation: text-blink 2s infinite;
-        }
-
-        @keyframes hex-rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        @keyframes hex-pulse {
-          0%, 100% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.5); opacity: 1; }
-        }
-
-        @keyframes text-blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
+        .video-loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; background: #000; }
+        .hex-svg { width: 80px; height: 80px; animation: rotate 4s linear infinite; }
+        .loading-text { margin-top: 20px; color: #00f2ff; font-family: monospace; font-size: 10px; letter-spacing: 3px; animation: blink 2s infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.4); opacity: 1; } }
+        @keyframes blink { 50% { opacity: 0.3; } }
       `}</style>
     </div>
   );
