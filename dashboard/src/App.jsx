@@ -21,7 +21,7 @@ export default function App() {
 
     const connect = () => {
       console.log("🛰️ Attempting WebSocket uplink...");
-      socket = new WebSocket(`ws://${PI_HOST}:3000`);
+      socket = new WebSocket(`wss://${PI_HOST}:3000`);
       socketRef.current = socket;
 
       socket.onopen = () => {
@@ -79,13 +79,16 @@ export default function App() {
 
   const handleDriveUpdate = async (keysArray) => {
     try {
-      const response = await fetch(`http://${PI_HOST}:3000/api/control/drive`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `https://${PI_HOST}:3000/api/control/drive`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ keys: keysArray }),
         },
-        body: JSON.stringify({ keys: keysArray }),
-      });
+      );
 
       if (!response.ok) {
         console.warn("Server responded with an error");

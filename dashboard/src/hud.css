@@ -13,13 +13,18 @@ html {
   overflow: hidden;
   background: #000;
   font-family: "Segoe UI", sans-serif;
+  overscroll-behavior: none;
+  height: 100dvh;
 }
 
 .viewport {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  /* dvh is the modern fix for mobile browser bars */
+  height: 100vh; /* Fallback */
+  height: 100dvh;
   background: #050505;
+  overflow: hidden;
 }
 
 #videoPlayer {
@@ -92,7 +97,12 @@ html {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 30px;
+
+  /* Replace your 'padding: 30px' with this: */
+  padding: max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+
   box-sizing: border-box;
 }
 
@@ -316,4 +326,18 @@ button:active {
   100% {
     transform: scale(1);
   }
+}
+
+@keyframes flux-glow {
+  from {
+    stroke-dashoffset: 12; /* Multiple of (4 + 2) */
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.energy-line {
+  /* Use 'linear' to keep the speed constant */
+  animation: flux-glow 1s linear infinite;
 }

@@ -4,42 +4,27 @@ const SERVER_IP = "rover.tail9d0237.ts.net";
 
 export const VideoStream = () => {
   const videoRef = useRef(null);
-  const pcRef = useRef(null); // Keep a reference to the peer connection
+  const audioRef = useRef(null); // Separate ref for audio
+  const pcRef = useRef(null);
+  const audioPcRef = useRef(null); // Separate PC for audio stream
   const [isLoading, setIsLoading] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(true);
 
-  const startWebRTC = async () => {
-    // 1. Clean up existing connection if it exists
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-
+  // --- VIDEO HANDSHAKE ---
+  const startVideoWebRTC = async () => {
+    if (pcRef.current) pcRef.current.close();
     setIsLoading(true);
-    console.log("🛰️ Attempting to link satellite...");
 
     try {
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       pcRef.current = pc;
-
-      // 2. MONITOR FOR FAILURE
-      pc.onconnectionstatechange = () => {
-        if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-          console.log("❌ Link lost. Retrying in 5s...");
-          setIsLoading(true);
-
-          // Wait 5 seconds and try a fresh handshake
-          setTimeout(startWebRTC, 5000);
-        }
-      };
-
       pc.addTransceiver("video", { direction: "recvonly" });
 
       pc.ontrack = (e) => {
         if (videoRef.current) {
           videoRef.current.srcObject = e.streams[0];
-          videoRef.current.play().catch(() => {});
           videoRef.current.onloadedmetadata = () => setIsLoading(false);
         }
       };
@@ -47,27 +32,73 @@ export const VideoStream = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const res = await fetch(`http://${SERVER_IP}:8889/cam/whep`, {
+      const res = await fetch(`https://${SERVER_IP}:8889/cam/whep`, {
         method: "POST",
         headers: { "Content-Type": "application/sdp" },
         body: pc.localDescription.sdp,
       });
 
-      if (!res.ok) throw new Error("Server offline");
+      const answer = await res.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answer });
+    } catch (err) {
+      console.error("📡 Video Signal Error:", err);
+      setTimeout(startVideoWebRTC, 5000);
+    }
+  };
+
+  // --- AUDIO HANDSHAKE ---
+  const startAudioWebRTC = async () => {
+    if (audioPcRef.current) audioPcRef.current.close();
+
+    try {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+      audioPcRef.current = pc;
+      pc.addTransceiver("audio", { direction: "recvonly" });
+
+      pc.ontrack = (e) => {
+        if (audioRef.current) {
+          audioRef.current.srcObject = e.streams[0];
+          // We don't play() yet to avoid browser "Autoplay Policy" crashes
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const res = await fetch(`https://${SERVER_IP}:8889/mic/whep`, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: pc.localDescription.sdp,
+      });
 
       const answer = await res.text();
       await pc.setRemoteDescription({ type: "answer", sdp: answer });
     } catch (err) {
-      console.error("📡 Signal Error:", err.message);
-      setIsLoading(true);
-      // If the fetch fails (server down), try again in 5s
-      setTimeout(startWebRTC, 5000);
+      console.error("📡 Audio Signal Error:", err);
+    }
+  };
+
+  const handleToggleAudio = () => {
+    if (!audioEnabled) {
+      audioRef.current
+        ?.play()
+        .catch((e) => console.error("Audio play blocked", e));
+      setAudioEnabled(true);
+    } else {
+      audioRef.current?.pause();
+      setAudioEnabled(false);
     }
   };
 
   useEffect(() => {
-    startWebRTC();
-    return () => pcRef.current?.close();
+    startVideoWebRTC();
+    startAudioWebRTC();
+    return () => {
+      pcRef.current?.close();
+      audioPcRef.current?.close();
+    };
   }, []);
 
   return (
@@ -81,6 +112,31 @@ export const VideoStream = () => {
         overflow: "hidden",
       }}
     >
+      {/* Hidden Audio Element */}
+      <audio ref={audioRef} autoPlay={false} />
+
+      {/* Audio Control UI */}
+      {!isLoading && (
+        <button
+          onClick={handleToggleAudio}
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            zIndex: 100,
+            background: "rgba(0,0,0,0.5)",
+            border: "1px solid #00f2ff",
+            color: "#00f2ff",
+            padding: "5px 10px",
+            cursor: "pointer",
+            fontSize: "10px",
+            fontFamily: "monospace",
+          }}
+        >
+          {audioEnabled ? "🔊 MIC_LIVE" : "🔇 MIC_MUTED"}
+        </button>
+      )}
+
       {isLoading && (
         <div className="video-loader">
           <div className="hex-container">
@@ -99,13 +155,13 @@ export const VideoStream = () => {
 
       <div
         style={{
-          position: "relative", // Essential for absolute children
+          position: "relative",
           width: "100%",
           height: "100%",
           opacity: isLoading ? 0 : 1,
           transition: "opacity 1s ease",
           overflow: "hidden",
-          aspectRatio: "16 / 9", // Force the container to match the 720p stream
+          aspectRatio: "16 / 9",
         }}
       >
         <video
@@ -113,14 +169,10 @@ export const VideoStream = () => {
           autoPlay
           muted
           playsInline
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-          }}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
 
-        {/* Drive assist HUD */}
+        {/* HUD Layer */}
         {!isLoading && (
           <svg
             viewBox="0 0 160 90"
@@ -135,15 +187,37 @@ export const VideoStream = () => {
             }}
           >
             <defs>
-              /* 1. This creates the "Neon Glow" effect */
-              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="0.8" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              <linearGradient
+                id="fadeGradient"
+                x1="0%"
+                y1="100%"
+                x2="0%"
+                y2="0%"
+              >
+                <stop offset="0%" stopColor="black" />
+                <stop offset="20%" stopColor="white" />
+                <stop offset="80%" stopColor="white" />
+                <stop offset="100%" stopColor="black" />
+              </linearGradient>
+              <mask id="lineMask">
+                <rect
+                  x="0"
+                  y="0"
+                  width="100%"
+                  height="100%"
+                  fill="url(#fadeGradient)"
+                />
+              </mask>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
               </filter>
             </defs>
-
-            {/* Left Fancy Line */}
             <line
+              className="energy-line"
               x1="54.5"
               y1="90"
               x2="70"
@@ -151,12 +225,12 @@ export const VideoStream = () => {
               stroke="#00f2ff"
               strokeWidth="0.8"
               strokeDasharray="4, 2"
+              mask="url(#lineMask)"
               filter="url(#glow)"
-              opacity="0.2"
+              opacity="0.1"
             />
-
-            {/* Right Fancy Line (Symmetrical) */}
             <line
+              className="energy-line"
               x1="115"
               y1="90"
               x2="85"
@@ -164,8 +238,9 @@ export const VideoStream = () => {
               stroke="#00f2ff"
               strokeWidth="0.8"
               strokeDasharray="4, 2"
+              mask="url(#lineMask)"
               filter="url(#glow)"
-              opacity="0.2"
+              opacity="0.1"
             />
           </svg>
         )}
@@ -176,7 +251,6 @@ export const VideoStream = () => {
         .hex-svg { width: 80px; height: 80px; animation: rotate 4s linear infinite; }
         .loading-text { margin-top: 20px; color: #00f2ff; font-family: monospace; font-size: 10px; letter-spacing: 3px; animation: blink 2s infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.4); opacity: 1; } }
         @keyframes blink { 50% { opacity: 0.3; } }
       `}</style>
     </div>

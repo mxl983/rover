@@ -4,7 +4,8 @@ services:
     container_name: mediamtx
     network_mode: "host"
     privileged: true
-    # Add these specific caps for hardware drivers
+    security_opt:
+      - apparmor:unconfined
     cap_add:
       - SYS_RAWIO
     devices:
@@ -15,9 +16,16 @@ services:
       - /dev/media2:/dev/media2
       - /dev/media3:/dev/media3
       - /dev/media4:/dev/media4
+      - /dev/video0:/dev/video0
+      - /dev/video10:/dev/video10
+      - /dev/video11:/dev/video11
+      - /dev/video12:/dev/video12
     volumes:
       - ./mediamtx.yml:/mediamtx.yml
       - /dev:/dev
+      - /dev/shm:/dev/shm
+      - ./rover.tail9d0237.ts.net.crt:/rover.tail9d0237.ts.net.crt
+      - ./rover.tail9d0237.ts.net.key:/rover.tail9d0237.ts.net.key
     restart: always
 
   control_server:
@@ -35,6 +43,8 @@ services:
       - /dev/dma_heap:/dev/dma_heap
       - ./photos:/app/photos
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./rover.tail9d0237.ts.net.crt:/cert.crt
+      - ./rover.tail9d0237.ts.net.key:/cert.key
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq

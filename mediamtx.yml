@@ -3,54 +3,31 @@
 paths:
   cam:
     source: rpiCamera
-    # Use 2304x1728 for the widest possible 4:3 "un-cropped" view
-    # Or 1536x1152 for a good balance of FOV and performance
-    # rpiCameraWidth: 1280
-    # rpiCameraHeight: 720
-    # rpiCameraFPS: 60
-    # Module 3 is very sharp; this helps with high-speed rover movement
-    # rpiCameraBitrate: 4000000
-
-    # 720p
+    # source: publisher
     rpiCameraWidth: 1280
     rpiCameraHeight: 720
-    rpiCameraFPS: 60
-    # rpiCameraAfMode: continuous
-    # rpiCameraAfRange: normal
-    # # For driving, 'manual' with LensPosition 0.0 (infinity) is often more stable
-    rpiCameraAfMode: manual
-    rpiCameraLensPosition: 0.0
+    rpiCameraFPS: 60.0
+    rpiCameraIDRPeriod: 120
+    # rpiCameraBitrate: 2000000
 
-    # 1080p
-    # rpiCameraWidth: 1920
-    # rpiCameraHeight: 1080
-    # rpiCameraFPS: 30
-    # rpiCameraAfMode: continuous
-    # rpiCameraBitrate: 6000000
+    # FIX 1: Shorter IDR period (Keyframe every 0.5s).
+    # This reduces "catch-up" lag if the network blips.
+    rpiCameraAfMode: continuous
+    rpiCameraProfile: baseline
+    # rpiCameraLensPosition: 0.0
 
-    # 4K
-    # rpiCameraWidth: 4608
-    # rpiCameraHeight: 2592
-    # rpiCameraFPS: 30
-    # rpiCameraAfMode: continuous
-    # rpiCameraBitrate: 6000000
-    # If the image is upside down (common in rovers), uncomment the next line:
-    # rpiCameraVFlip: yes
+  mic:
+    source: publisher
 
 # WebRTC Server settings
 webrtc: yes
 webrtcAddress: :8889
-webrtcEncryption: no
-webrtcServerKey: server.key
-webrtcServerCert: server.crt
+webrtcEncryption: yes # CHANGE THIS TO YES
+webrtcServerKey: rover.tail9d0237.ts.net.key # Path to the file from Step 1
+webrtcServerCert: rover.tail9d0237.ts.net.crt # Path to the file from Step 1
+
 webrtcAllowOrigins: ["*"]
-
-# These replace the old ICEUDP settings
-# UDP is the default and best for RC cars
 webrtcLocalUDPAddress: :8189
-# webrtcLocalTCPAddress: :8189 # Leave this commented out for ultra-low latency
-
-# Crucial for Tailscale/Remote access
 webrtcIPsFromInterfaces: yes
 webrtcAdditionalHosts: [100.109.197.90] # Your Pi's Tailscale IP
 

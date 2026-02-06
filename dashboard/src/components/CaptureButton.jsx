@@ -7,7 +7,7 @@ export const CaptureButton = () => {
   const takePicture = async () => {
     setIsCapturing(true);
     try {
-      const res = await fetch(`http://${PI_HOST}:3000/api/camera/capture`, {
+      const res = await fetch(`https://${PI_HOST}:3000/api/camera/capture`, {
         method: "POST",
       });
       const data = await res.json();

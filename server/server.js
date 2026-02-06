@@ -1,6 +1,5 @@
 import express from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
-import http from "http";
+import https from "https";
 import { WebSocketServer, WebSocket } from "ws";
 import { getCpuTemp, getBattery, getCpuLoad } from "./utils/sysUtils.js"; // Note the .js extension
 import { PythonShell } from "python-shell";
@@ -9,6 +8,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import util from "util";
+import fs from "fs";
+
+const sslOptions = {
+  // These paths match the volume mounts in your docker-compose.yml
+  key: fs.readFileSync("/cert.key"),
+  cert: fs.readFileSync("/cert.crt"),
+};
 
 // Reconstruct __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -27,27 +33,38 @@ pyShell.on("message", function (message) {
 });
 
 const app = express();
-
-// Enable CORS for all routes
-app.use(cors());
-
-// Ensure you can parse JSON bodies
 app.use(express.json());
 
-const server = http.createServer(app);
+const server = https.createServer(sslOptions, app);
 const wss = new WebSocketServer({ server });
 
-app.use(express.json());
+// Enable CORS for all routes
+const corsOptions = {
+  origin: [
+    "http://localhost:5173", // Your local Vite dev server
+    "https://mxl983.github.io", // Your production dashboard
+  ],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// IMPORTANT: Add this specific handler for OPTIONS (Preflight) requests
+app.options("/*path", cors(corsOptions));
 
 // PROXY: Forward video stream requests to MediaMTX
-app.use(
-  "/video-stream",
-  createProxyMiddleware({
-    target: "http://mediamtx:8889",
-    changeOrigin: true,
-    pathRewrite: { "^/video-stream": "" },
-  }),
-);
+// app.use(
+//   "/video-stream",
+//   createProxyMiddleware({
+//     target: "http://mediamtx:8889",
+//     changeOrigin: true,
+//     pathRewrite: { "^/video-stream": "" },
+//   }),
+// );
+
+// --- SECURE SERVER SETUP ---
 
 const execPromise = util.promisify(exec);
 
@@ -181,7 +198,7 @@ wss.on("connection", (ws) => {
 
 // app.listen(3000, () => console.log('Server at :3000'));
 server.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on http://100.x.x.x:3000");
+  console.log("Server running on https://100.x.x.x:3000");
 });
 
 function getSystemStats() {
