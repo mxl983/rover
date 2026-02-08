@@ -59,6 +59,7 @@ const HISTORY_SIZE = 20;
 voltageShell.on("message", (message) => {
   try {
     const data = JSON.parse(message);
+    console.log(data);
     if (data.type === "voltage" && data.value) {
       // 1. Add new reading to history
       voltageHistory.push(data.value);
@@ -75,7 +76,7 @@ voltageShell.on("message", (message) => {
 
       // 4. Update the global percentage based on AVERAGE
       currentBatteryPct = calculatePercentage(avgVoltage);
-      distance = data?.distance?.M1 || 0;
+      distance = data?.distance || 0;
     }
   } catch (err) {
     console.error("Failed to parse voltage data:", err);
@@ -176,7 +177,6 @@ app.post("/api/control/drive", (req, res) => {
 
   res.sendStatus(200);
 });
-
 
 setInterval(() => {
   console.log("A");

@@ -137,7 +137,12 @@ html {
   border-left: 3px solid var(--spacex-cyan);
 }
 
-.hud-header,
+.hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .hud-footer {
   display: flex;
   justify-content: space-between;
