@@ -2,113 +2,244 @@ import smbus
 import struct
 import time
 
-# --- INITIALIZATION ---
-bus = smbus.SMBus(1)
-ADDR = 0x26
+UPLOAD_DATA = 1  # 1:接收总的编码器数据 2:接收实时的编码器
+# 1: Receive total encoder data 2: Receive real-time encoder
 
-# Register Map
-REG_TYPE = 0x01
-REG_DEADZONE = 0x02
-REG_PULSE_LINE = 0x03
-REG_PULSE_PHASE = 0x04
-REG_WHEEL_DIA = 0x05
-REG_SPEED_CTRL = 0x06
-REG_ENCODER_ALL = 0x20  # Start of 32-bit encoder registers
-REG_BATTERY_VOLTAGE = 0x1B
+MOTOR_TYPE = 1  # 1:520电机 2:310电机 3:测速码盘TT电机 4:TT直流减速电机 5:L型520电机
+# 1:520 motor 2:310 motor 3:speed code disc TT motor 4:TT DC reduction motor 5:L type 520 motor
+
+# 创建I2C通信对象   Create I2C communication object
+bus = smbus.SMBus(1)  # 1代表I2C总线号，这里可能要根据自己驱动板所在的I2C总线来修改
+# 1 represents the I2C bus number. You may need to modify it according to the I2C bus where your driver board is located.
+
+# I2C地址   I2C Address
+MOTOR_MODEL_ADDR = 0x26
+
+# I2C寄存器定义 I2C Register Definition
+MOTOR_TYPE_REG = 0x01
+MOTOR_DEADZONE_REG = 0x02
+MOTOR_PLUSELINE_REG = 0x03
+MOTOR_PLUSEPHASE_REG = 0x04
+WHEEL_DIA_REG = 0x05
+SPEED_CONTROL_REG = 0x06
+PWM_CONTROL_REG = 0x07
+
+READ_TEN_M1_ENCODER_REG = 0x10
+READ_TEN_M2_ENCODER_REG = 0x11
+READ_TEN_M3_ENCODER_REG = 0x12
+READ_TEN_M4_ENCODER_REG = 0x13
+
+READ_ALLHIGH_M1_REG = 0x20
+READ_ALLLOW_M1_REG = 0x21
+READ_ALLHIGH_M2_REG = 0x22
+READ_ALLLOW_M2_REG = 0x23
+READ_ALLHIGH_M3_REG = 0x24
+READ_ALLLOW_M3_REG = 0x25
+READ_ALLHIGH_M4_REG = 0x26
+READ_ALLLOW_M4_REG = 0x27
+
+# 全局变量  Global variables
+encoder_offset = [0] * 4
+encoder_now = [0] * 4
+
+# 写数据到I2C寄存器 Write data to I2C register
 
 
-def i2c_write(reg, data):
-  bus.write_i2c_block_data(ADDR, reg, data)
+def i2c_write(addr, reg, data):
+  bus.write_i2c_block_data(addr, reg, data)
+
+# 从I2C寄存器读取数据   Reading data from I2C registers
 
 
-def set_520_motor_params():
-  """Configures the driver specifically for 520 motor specs"""
-  print("Configuring 520 motor parameters...")
-  i2c_write(REG_TYPE, [1])                 # Type 1: 520 Motor
-  time.sleep(0.1)
-  i2c_write(REG_PULSE_PHASE, [0, 30])      # Reduction Ratio: 30
-  time.sleep(0.1)
-  i2c_write(REG_PULSE_LINE, [0, 11])       # Magnetic poles: 11
-  time.sleep(0.1)
-  # Wheel Diameter 67.0mm (Float to bytes)
-  i2c_write(REG_WHEEL_DIA, list(struct.pack('<f', 67.00)))
-  time.sleep(0.1)
-  i2c_write(REG_DEADZONE, [1600 >> 8, 1600 & 0xFF])  # Deadzone: 1600
-  time.sleep(0.1)
-  print("Configuration complete.")
+def i2c_read(addr, reg, length):
+  return bus.read_i2c_block_data(addr, reg, length)
+
+# 浮点数转字节  Floating point number to byte
+
+
+def float_to_bytes(f):
+  return struct.pack('<f', f)  # 小端字节序 Little-endian
+
+# 配置电机类型  Configure motor type
+
+
+def set_motor_type(data):
+  i2c_write(MOTOR_MODEL_ADDR, MOTOR_TYPE_REG, [data])
+
+# 配置死区  Configuring Dead Zone
+
+
+def set_motor_deadzone(data):
+  buf = [(data >> 8) & 0xFF, data & 0xFF]
+  i2c_write(MOTOR_MODEL_ADDR, MOTOR_DEADZONE_REG, buf)
+
+# 配置磁环线    Configuring magnetic loop
+
+
+def set_pluse_line(data):
+  buf = [(data >> 8) & 0xFF, data & 0xFF]
+  i2c_write(MOTOR_MODEL_ADDR, MOTOR_PLUSELINE_REG, buf)
+
+# 配置减速比    Configure the reduction ratio
+
+
+def set_pluse_phase(data):
+  buf = [(data >> 8) & 0xFF, data & 0xFF]
+  i2c_write(MOTOR_MODEL_ADDR, MOTOR_PLUSEPHASE_REG, buf)
+
+# 配置轮子直径  Configuration Diameter
+
+
+def set_wheel_dis(data):
+  bytes_data = float_to_bytes(data)
+  i2c_write(MOTOR_MODEL_ADDR, WHEEL_DIA_REG, list(bytes_data))
+
+# 控制速度  Controlling Speed
 
 
 def control_speed(m1, m2, m3, m4):
-  """Sends target velocity to the onboard PID controller"""
   speeds = [
       (m1 >> 8) & 0xFF, m1 & 0xFF,
       (m2 >> 8) & 0xFF, m2 & 0xFF,
       (m3 >> 8) & 0xFF, m3 & 0xFF,
       (m4 >> 8) & 0xFF, m4 & 0xFF
   ]
-  i2c_write(REG_SPEED_CTRL, speeds)
+  i2c_write(MOTOR_MODEL_ADDR, SPEED_CONTROL_REG, speeds)
+
+# 控制PWM(适用于无编码器的电机) Control PWM (for motors without encoder)
 
 
-def read_encoders():
-  """Reads 32-bit accumulated encoder data for all 4 motors"""
-  results = []
+def control_pwm(m1, m2, m3, m4):
+  pwms = [
+      (m1 >> 8) & 0xFF, m1 & 0xFF,
+      (m2 >> 8) & 0xFF, m2 & 0xFF,
+      (m3 >> 8) & 0xFF, m3 & 0xFF,
+      (m4 >> 8) & 0xFF, m4 & 0xFF
+  ]
+  i2c_write(MOTOR_MODEL_ADDR, PWM_CONTROL_REG, pwms)
+
+# 读取编码器数据    Read encoder data
+
+
+def read_10_encoder():
+  global encoder_offset
+  formatted_values = []
   for i in range(4):
-    # Read 4 bytes (High word + Low word)
-    data = bus.read_i2c_block_data(ADDR, REG_ENCODER_ALL + (i * 2), 4)
-    val = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]
-    # Handle 32-bit signed integer
-    if val >= 0x80000000:
-      val -= 0x100000000
-    results.append(val)
-  return results
+    reg = READ_TEN_M1_ENCODER_REG + i
+    buf = i2c_read(MOTOR_MODEL_ADDR, reg, 2)
+    encoder_offset[i] = (buf[0] << 8) | buf[1]
+    # 检查最高位（符号位）是否为 1  Check if the highest bit (sign bit) is 1
+    if encoder_offset[i] & 0x8000:
+      encoder_offset[i] -= 0x10000  # 将其转为负数 Turn it into a negative number
+    formatted_values.append("M{}:{}".format(i + 1, encoder_offset[i]))
+  return ", ".join(formatted_values)
 
-def get_distance_traveled_mm():
-    """
-    Calculates distance in millimeters for each wheel.
-    Uses the 520 motor specs: 11 poles * 30 reduction ratio = 330 ticks/rev.
-    Wheel diameter is 67mm.
-    """
-    ticks = read_encoders()
-    
-    # 520 Motor Logic: 11 (poles) * 30 (reduction) = 330 ticks per rotation
-    ppr = 11 * 30 
-    diameter = 67.0
-    circumference = diameter * math.pi
-    
-    # Distance (mm) = (Current Ticks / Ticks per Rev) * Circumference
-    distances = [(t / ppr) * circumference for t in ticks]
-    return distances
 
-def read_battery_voltage():
-    """
-    Reads the battery voltage in millivolts (mV) from the driver board.
-    Commonly found at register 0x1B for this I2C driver model.
-    """
-    try:
-        # Read 2 bytes from the voltage register
-        data = bus.read_i2c_block_data(ADDR, REG_BATTERY_VOLTAGE, 2)
-        voltage_mv = (data[0] << 8) | data[1]
-        return voltage_mv / 1000.0  # Convert to Volts (V)
-    except:
-        return 0.0 # Return 0 if the board model doesn't support voltage reading
-      
+def read_all_encoder():
+  global encoder_now
+  formatted_values = []
+  for i in range(4):
+    high_reg = READ_ALLHIGH_M1_REG + (i * 2)
+    low_reg = READ_ALLLOW_M1_REG + (i * 2)
+    high_buf = i2c_read(MOTOR_MODEL_ADDR, high_reg, 2)
+    low_buf = i2c_read(MOTOR_MODEL_ADDR, low_reg, 2)
 
-# --- MAIN EXECUTION ---
-if __name__ == "__main__":
+    high_val = high_buf[0] << 8 | high_buf[1]
+    low_val = low_buf[0] << 8 | low_buf[1]
+
+    encoder_val = (high_val << 16) | low_val
+
+    # 处理符号扩展，假设 32 位有符号整数    Handles sign extension, assuming 32-bit signed integers
+    if encoder_val >= 0x80000000:  # 如果大于 2^31，说明应该是负数  If it is greater than 2^31, it should be a negative number
+      encoder_val -= 0x100000000  # 将其转为负数  Turn it into a negative number
+    encoder_now[i] = encoder_val
+    formatted_values.append("M{}:{}".format(i + 1, encoder_now[i]))
+  return ", ".join(formatted_values)
+
+# 以下的参数根据自己的实际使用电机配置即可，只要配置一次即可，电机驱动板有断电保存功能
+# The following parameters can be configured according to the actual motor you use. You only need to configure it once. The motor driver board has a power-off saving function.
+
+
+def set_motor_parameter():
+
+  if MOTOR_TYPE == 1:
+    set_motor_type(1)  # 配置电机类型   Configure motor type
+    time.sleep(0.1)
+    # 配置减速比，查电机手册得出   Configure the reduction ratio and check the motor manual for the result.
+    set_pluse_phase(30)
+    time.sleep(0.1)
+    # 配置磁环线，查电机手册得出    Configure the magnetic ring wire and check the motor manual to get the result
+    set_pluse_line(11)
+    time.sleep(0.1)
+    # 配置轮子直径，测量得出  Configure the wheel diameter and measure it
+    set_wheel_dis(67.00)
+    time.sleep(0.1)
+    # 配置电机死区，实验得出  Configure the motor dead zone, and the experiment shows
+    set_motor_deadzone(1600)
+    time.sleep(0.1)
+
+  elif MOTOR_TYPE == 2:
+    set_motor_type(2)
+    time.sleep(0.1)
+    set_pluse_phase(20)
+    time.sleep(0.1)
+    set_pluse_line(13)
+    time.sleep(0.1)
+    set_wheel_dis(48.00)
+    time.sleep(0.1)
+    set_motor_deadzone(1200)
+    time.sleep(0.1)
+
+  elif MOTOR_TYPE == 3:
+    set_motor_type(3)
+    time.sleep(0.1)
+    set_pluse_phase(45)
+    time.sleep(0.1)
+    set_pluse_line(13)
+    time.sleep(0.1)
+    set_wheel_dis(68.00)
+    time.sleep(0.1)
+    set_motor_deadzone(1250)
+    time.sleep(0.1)
+
+  elif MOTOR_TYPE == 4:
+    set_motor_type(4)
+    time.sleep(0.1)
+    set_pluse_phase(48)
+    time.sleep(0.1)
+    set_motor_deadzone(1000)
+    time.sleep(0.1)
+
+  elif MOTOR_TYPE == 5:
+    set_motor_type(1)
+    time.sleep(0.1)
+    set_pluse_phase(40)
+    time.sleep(0.1)
+    set_pluse_line(11)
+    time.sleep(0.1)
+    set_wheel_dis(67.00)
+    time.sleep(0.1)
+    set_motor_deadzone(1600)
+    time.sleep(0.1)
+
+VOLTAGE_REG = 0x08
+
+def get_battery_voltage():
   try:
-    set_520_motor_params()
-
-    print("Moving forward at speed 500...")
-    control_speed(500, 500, 500, 500)
-
-    for _ in range(10):
-      encoders = read_encoders()
-      print(f"Encoder Ticks: M1:{encoders[0]}, M2:{encoders[1]}")
-      time.sleep(0.5)
-
-  except KeyboardInterrupt:
-    print("\nStopping motors...")
-  finally:
-    # Safety: Reset speed to 0 regardless of how script ends
-    control_speed(0, 0, 0, 0)
-    print("System Halted.")
+    # Read 2 bytes from register 0x08
+    buf = i2c_read(MOTOR_MODEL_ADDR, 0x08, 2)
+    
+    # Combine bytes: High byte << 8 | Low byte
+    raw_val = (buf[0] << 8) | buf[1]
+    
+    # If your result was 0.121, it means raw_val was 121.
+    # Most 12V rover batteries (3S LiPo) sit between 10.0 and 12.6.
+    # If raw_val is 121, the multiplier should be 0.1
+    if raw_val < 200: 
+      return round(raw_val * 0.1, 2) # Converts 121 -> 12.1V
+        
+    # If the board sends actual millivolts (e.g., 12100)
+    return round(raw_val / 1000.0, 2) # Converts 12100 -> 12.1V
+      
+  except Exception as e:
+    return 0.0

@@ -12,7 +12,8 @@ paths:
 
     # FIX 1: Shorter IDR period (Keyframe every 0.5s).
     # This reduces "catch-up" lag if the network blips.
-    rpiCameraAfMode: continuous
+    rpiCameraAfMode: manual
+    rpiCameraLensPosition: 0.0
     rpiCameraProfile: baseline
     # rpiCameraLensPosition: 0.0
 

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-const PI_HOST = "rover.tail9d0237.ts.net";
+import { PI_HI_RES_CAPTURE_ENDPOINT } from "../constants";
 
 export const CaptureButton = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -7,7 +7,7 @@ export const CaptureButton = () => {
   const takePicture = async () => {
     setIsCapturing(true);
     try {
-      const res = await fetch(`https://${PI_HOST}:3000/api/camera/capture`, {
+      const res = await fetch(PI_HI_RES_CAPTURE_ENDPOINT, {
         method: "POST",
       });
       const data = await res.json();
@@ -25,16 +25,19 @@ export const CaptureButton = () => {
 
   return (
     <button
+      ype="button"
+      title="Take a 4k picture!!"
       onClick={takePicture}
       disabled={isCapturing}
       className={`capture-btn-circle ${isCapturing ? "shutter-active" : ""}`}
       aria-label="Take Photo"
     >
       <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+        <circle cx="12" cy="13" r="3.25" />
         <path
           fillRule="evenodd"
-          d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z"
+          d="M7.5 4.5a1 1 0 011-.8h7a1 1 0 011 .8L17.5 7h2.25A2.25 2.25 0 0122 9.25v9.5A2.25 2.25 0 0119.75 21H4.25A2.25 2.25 0 012 18.75v-9.5A2.25 2.25 0 014.25 7h2.25l1-2.5zM12 8.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"
+          clipRule="evenodd"
         />
       </svg>
     </button>

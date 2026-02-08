@@ -1,18 +1,39 @@
-import { useEffect, useRef, useState } from "react";
-
-const SERVER_IP = "rover.tail9d0237.ts.net";
+import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  PI_SERVER_IP,
+  VIDEO_STREAM_HOST,
+  AUDIO_STREAM_HOST,
+} from "../constants";
 
 export const VideoStream = () => {
   const videoRef = useRef(null);
-  const audioRef = useRef(null); // Separate ref for audio
+  const audioRef = useRef(null);
   const pcRef = useRef(null);
-  const audioPcRef = useRef(null); // Separate PC for audio stream
+  const audioPcRef = useRef(null);
+
+  const retryTimeoutRef = useRef({ video: null, audio: null });
+
+  const isAudioEnabledRef = useRef(false);
+
   const [isLoading, setIsLoading] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+
+  const cleanup = (type) => {
+    if (type === "video") {
+      pcRef.current?.close();
+      pcRef.current = null;
+    } else {
+      audioPcRef.current?.close();
+      audioPcRef.current = null;
+    }
+    if (retryTimeoutRef.current[type]) {
+      clearTimeout(retryTimeoutRef.current[type]);
+    }
+  };
 
   // --- VIDEO HANDSHAKE ---
-  const startVideoWebRTC = async () => {
-    if (pcRef.current) pcRef.current.close();
+  const startVideoWebRTC = useCallback(async () => {
+    cleanup("video");
     setIsLoading(true);
 
     try {
@@ -20,6 +41,18 @@ export const VideoStream = () => {
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       pcRef.current = pc;
+
+      // Reconnect if connection drops
+      pc.oniceconnectionstatechange = () => {
+        if (
+          pc.iceConnectionState === "disconnected" ||
+          pc.iceConnectionState === "failed"
+        ) {
+          console.warn("📹 Video stream lost. Retrying...");
+          retryTimeoutRef.current.video = setTimeout(startVideoWebRTC, 3000);
+        }
+      };
+
       pc.addTransceiver("video", { direction: "recvonly" });
 
       pc.ontrack = (e) => {
@@ -32,63 +65,80 @@ export const VideoStream = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const res = await fetch(`https://${SERVER_IP}:8889/cam/whep`, {
+      const res = await fetch(VIDEO_STREAM_HOST, {
         method: "POST",
         headers: { "Content-Type": "application/sdp" },
         body: pc.localDescription.sdp,
       });
 
+      if (!res.ok) throw new Error("Video server unreachable");
       const answer = await res.text();
       await pc.setRemoteDescription({ type: "answer", sdp: answer });
     } catch (err) {
       console.error("📡 Video Signal Error:", err);
-      setTimeout(startVideoWebRTC, 5000);
+      retryTimeoutRef.current.video = setTimeout(startVideoWebRTC, 5000);
     }
-  };
+  }, []);
 
   // --- AUDIO HANDSHAKE ---
-  const startAudioWebRTC = async () => {
-    if (audioPcRef.current) audioPcRef.current.close();
+  const startAudioWebRTC = useCallback(async () => {
+    cleanup("audio");
 
     try {
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       audioPcRef.current = pc;
+
+      pc.oniceconnectionstatechange = () => {
+        if (
+          pc.iceConnectionState === "disconnected" ||
+          pc.iceConnectionState === "failed"
+        ) {
+          console.warn("🔊 Audio stream lost. Retrying...");
+          retryTimeoutRef.current.audio = setTimeout(startAudioWebRTC, 3000);
+        }
+      };
+
       pc.addTransceiver("audio", { direction: "recvonly" });
 
       pc.ontrack = (e) => {
         if (audioRef.current) {
           audioRef.current.srcObject = e.streams[0];
-          // We don't play() yet to avoid browser "Autoplay Policy" crashes
+          // If the user previously had audio ON, resume it automatically on reconnect
+          if (isAudioEnabledRef.current) {
+            audioRef.current.play().catch(() => {});
+          }
         }
       };
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const res = await fetch(`https://${SERVER_IP}:8889/mic/whep`, {
+      const res = await fetch(AUDIO_STREAM_HOST, {
         method: "POST",
         headers: { "Content-Type": "application/sdp" },
         body: pc.localDescription.sdp,
       });
 
+      if (!res.ok) throw new Error("Audio server unreachable");
       const answer = await res.text();
       await pc.setRemoteDescription({ type: "answer", sdp: answer });
     } catch (err) {
       console.error("📡 Audio Signal Error:", err);
+      retryTimeoutRef.current.audio = setTimeout(startAudioWebRTC, 5000);
     }
-  };
+  }, []);
 
   const handleToggleAudio = () => {
     if (!audioEnabled) {
-      audioRef.current
-        ?.play()
-        .catch((e) => console.error("Audio play blocked", e));
+      audioRef.current?.play().catch((e) => console.error("Audio blocked", e));
       setAudioEnabled(true);
+      isAudioEnabledRef.current = true;
     } else {
       audioRef.current?.pause();
       setAudioEnabled(false);
+      isAudioEnabledRef.current = false;
     }
   };
 
@@ -96,10 +146,10 @@ export const VideoStream = () => {
     startVideoWebRTC();
     startAudioWebRTC();
     return () => {
-      pcRef.current?.close();
-      audioPcRef.current?.close();
+      cleanup("video");
+      cleanup("audio");
     };
-  }, []);
+  }, [startVideoWebRTC, startAudioWebRTC]);
 
   return (
     <div
@@ -112,17 +162,15 @@ export const VideoStream = () => {
         overflow: "hidden",
       }}
     >
-      {/* Hidden Audio Element */}
       <audio ref={audioRef} autoPlay={false} />
 
-      {/* Audio Control UI */}
       {!isLoading && (
         <button
           onClick={handleToggleAudio}
           style={{
             position: "absolute",
             top: "10px",
-            right: "10px",
+            right: "50%",
             zIndex: 100,
             background: "rgba(0,0,0,0.5)",
             border: "1px solid #00f2ff",
@@ -131,6 +179,8 @@ export const VideoStream = () => {
             cursor: "pointer",
             fontSize: "10px",
             fontFamily: "monospace",
+            width: "fit-content",
+            transform: "translateX(50%)",
           }}
         >
           {audioEnabled ? "🔊 MIC_LIVE" : "🔇 MIC_MUTED"}
@@ -172,7 +222,6 @@ export const VideoStream = () => {
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
 
-        {/* HUD Layer */}
         {!isLoading && (
           <svg
             viewBox="0 0 160 90"

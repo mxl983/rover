@@ -109,7 +109,7 @@ html {
 .hud-overlay button,
 .glass-card {
   background: var(--glass);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(2px);
   border: 1px solid var(--border);
   border-radius: 2px;
   color: var(--spacex-cyan);

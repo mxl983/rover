@@ -2,41 +2,74 @@ import IIC
 import sys
 import json
 import time
+import math
 
-# Register for battery voltage on this driver board
-REG_BATTERY_VOLTAGE = 0x1B
+# Yahboom/Hiwonder specific voltage register
+VOLTAGE_REG = 0x08
 
 class VoltageMonitor:
     def __init__(self):
-        # Ensure the motor type is set so the board's internal ADCs are active
-        IIC.set_motor_parameter()
+        # We call this to ensure the board is awake and ADCs are active
+        self.ppr = 11 * 30 
+        self.diameter = 67.0
+        self.circumference = self.diameter * math.pi
+        self.last_ticks = 0
+        self.total_mileage_mm = 0
+        try:
+            IIC.set_motor_parameter()
+        except:
+            pass
 
     def get_voltage(self):
         try:
-            # Read 2 bytes (High and Low) from the voltage register
-            data = IIC.i2c_read(IIC.MOTOR_MODEL_ADDR, REG_BATTERY_VOLTAGE, 2)
-            # Combine bytes into a 16-bit value (millivolts)
-            voltage_mv = (data[0] << 8) | data[1]
-            return round(voltage_mv / 1000.0, 2)  # Convert to Volts
+            voltage_raw = IIC.get_battery_voltage()
+            return voltage_raw
+                
         except Exception as e:
+            # Log error to stderr so it doesn't break the JSON stdout pipe
+            sys.stderr.write(f"Voltage Read Error: {e}\n")
             return None
+        
+    def get_distances(self):
+        IIC.read_all_encoder()
+        # Using M1 as your reference
+        current_ticks = IIC.encoder_now[0] 
+        
+        # 1. Calculate how many ticks happened since the LAST check
+        delta_ticks = current_ticks - self.last_ticks
+        
+        # 2. Convert the ABSOLUTE delta to mm and add to total
+        # (This ensures reversing ADDS to mileage instead of subtracting)
+        step_dist = abs((delta_ticks / self.ppr) * self.circumference)
+        self.total_mileage_mm += step_dist
+        
+        # 3. Update last_ticks for the next loop
+        self.last_ticks = current_ticks
+        
+        return round(self.total_mileage_mm, 2)
 
 if __name__ == "__main__":
     monitor = VoltageMonitor()
     
-    # Listen for a 'check' command from Node.js
+    # Standard input loop for Node.js communication
     for line in sys.stdin:
         try:
-            cmd = json.loads(line)
+            cmd = json.loads(line.strip())
+            
             if cmd.get("command") == "get_voltage":
                 voltage = monitor.get_voltage()
+                distance = monitor.get_distances()
+                
+                # Output exactly what Node.js expects
                 print(json.dumps({
                     "status": "ok",
                     "type": "voltage",
                     "value": voltage,
-                    "unit": "V"
+                    "unit": "V",
+                    "distance": distance,
                 }))
                 sys.stdout.flush()
+                
         except Exception as e:
             print(json.dumps({"status": "error", "message": str(e)}))
             sys.stdout.flush()

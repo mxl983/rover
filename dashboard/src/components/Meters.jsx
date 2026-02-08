@@ -8,10 +8,10 @@ export const Meters = ({ stats }) => {
       <RoverSchematic />
       <div className="meter-row">
         <div className="stat">
-          BAT <span>98%</span>
+          BAT <span>{stats.battery || "-"}%</span>
         </div>
         <div className="stat">
-          VOL <span>12.4V</span>
+          VOL <span>{stats.voltage || "-"}V</span>
         </div>
         <div className="stat">
           DLAY <span id="lat">{stats.latency || "-"}ms</span>
@@ -19,7 +19,7 @@ export const Meters = ({ stats }) => {
       </div>
       <div className="meter-row">
         <div className="stat">
-          DIST <span>0M</span>
+          DIST <span>{Math.ceil((stats?.distance || 0) / 1000) || "-"}M</span>
         </div>
         <div className="stat">
           TEMP <span>{stats.cpuTemp || "-"}°C</span>
