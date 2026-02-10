@@ -140,7 +140,7 @@ html {
 .hud-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .hud-footer {

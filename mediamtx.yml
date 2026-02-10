@@ -10,7 +10,6 @@ paths:
     rpiCameraIDRPeriod: 120
     # rpiCameraBitrate: 2000000
 
-    # FIX 1: Shorter IDR period (Keyframe every 0.5s).
     # This reduces "catch-up" lag if the network blips.
     rpiCameraAfMode: manual
     rpiCameraLensPosition: 0.0
@@ -35,3 +34,6 @@ webrtcAdditionalHosts: [100.109.197.90] # Your Pi's Tailscale IP
 # Added STUN server to help the browser find the Pi
 webrtcICEServers2:
   - url: stun:stun.l.google.com:19302
+
+api: yes
+apiAddress: "0.0.0.0:9997"

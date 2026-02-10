@@ -231,15 +231,7 @@ def get_battery_voltage():
     
     # Combine bytes: High byte << 8 | Low byte
     raw_val = (buf[0] << 8) | buf[1]
-    
-    # If your result was 0.121, it means raw_val was 121.
-    # Most 12V rover batteries (3S LiPo) sit between 10.0 and 12.6.
-    # If raw_val is 121, the multiplier should be 0.1
-    if raw_val < 200: 
-      return round(raw_val * 0.1, 2) # Converts 121 -> 12.1V
-        
-    # If the board sends actual millivolts (e.g., 12100)
-    return round(raw_val / 1000.0, 2) # Converts 12100 -> 12.1V
+    return round(raw_val * 0.1, 2)
       
   except Exception as e:
     return 0.0

@@ -3,14 +3,16 @@ import sys
 import json
 import time
 import math
+import smbus
 
-# Yahboom/Hiwonder specific voltage register
+bus = smbus.SMBus(1)
 VOLTAGE_REG = 0x08
+address = 0x26 # 0x26 as confirmed by your i2cdump
 
 class VoltageMonitor:
     def __init__(self):
         # We call this to ensure the board is awake and ADCs are active
-        self.ppr = 11 * 30 
+        self.ppr = 11 * 30 * 10
         self.diameter = 67.0
         self.circumference = self.diameter * math.pi
         self.last_ticks = 0
@@ -48,6 +50,7 @@ class VoltageMonitor:
         
         return round(self.total_mileage_mm, 2)
 
+
 if __name__ == "__main__":
     monitor = VoltageMonitor()
     
@@ -67,6 +70,18 @@ if __name__ == "__main__":
                     "value": voltage,
                     "unit": "V",
                     "distance": distance,
+                }))
+                sys.stdout.flush()
+                
+            if cmd.get("command") == "get_rover_power_stats":
+                stats = monitor.get_rover_power_stats()
+                distance = monitor.get_distances()
+                
+                # Output exactly what Node.js expects
+                print(json.dumps({
+                    "status": "ok",
+                    "type": "voltage",
+                    "value": stats,
                 }))
                 sys.stdout.flush()
                 

@@ -4,6 +4,9 @@ services:
     container_name: mediamtx
     network_mode: "host"
     privileged: true
+    ports:
+      - "8888:8888"
+      - "9997:9997" # Make sure the API port is exposed
     security_opt:
       - apparmor:unconfined
     cap_add:
@@ -45,6 +48,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./rover.tail9d0237.ts.net.crt:/cert.crt
       - ./rover.tail9d0237.ts.net.key:/cert.key
+      - /tmp:/app/shared
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq
@@ -56,8 +60,9 @@ services:
     ports:
       - "3000:3000"
     command: npm start
-    networks:
-      - rover-net
+    # networks:
+    #   - rover-net
+    network_mode: "host"
     depends_on:
       - mediamtx
     restart: always

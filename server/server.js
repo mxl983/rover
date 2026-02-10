@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import util from "util";
 import fs from "fs";
+import axios from "axios";
 
 const sslOptions = {
   // These paths match the volume mounts in your docker-compose.yml
@@ -53,13 +54,13 @@ const voltageShell = new PythonShell("driver/VoltageMonitor.py", options);
 let currentBatteryPct = 0;
 let currentVoltage = 0;
 let distance = 0;
+let isCharging = false;
 const voltageHistory = [];
 const HISTORY_SIZE = 20;
 
 voltageShell.on("message", (message) => {
   try {
     const data = JSON.parse(message);
-    console.log(data);
     if (data.type === "voltage" && data.value) {
       // 1. Add new reading to history
       voltageHistory.push(data.value);
@@ -163,6 +164,132 @@ app.post("/api/camera/capture", async (req, res) => {
   }
 });
 
+app.post("/api/system/shutdown", (req, res) => {
+  // Create the "trigger" file in the shared volume
+  const triggerPath = "/app/shared/shutdown.req";
+  fs.writeFileSync(
+    triggerPath,
+    "shutdown requested at " + new Date().toISOString(),
+  );
+
+  res.json({ message: "Host shutdown signal sent to Pi." });
+});
+
+app.post("/api/system/reboot", (req, res) => {
+  try {
+    // Create the "reboot" trigger file in the shared volume
+    fs.writeFileSync("/app/shared/reboot.req", "rebooting");
+    res.json({ message: "Host reboot sequence initiated." });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to write signal file" });
+  }
+});
+
+app.post("/api/camera/nightvision", async (req, res) => {
+  const { active, secret } = req.body;
+  if (secret !== "rover-alpha-99") return res.status(401).send("Unauthorized");
+
+  // Prepare the payload based on your low-light tuning
+  const config = active
+    ? {
+        rpiCameraShutter: 66000,
+        rpiCameraGain: 8.0,
+        rpiCameraBrightness: 0.2,
+        rpiCameraContrast: 1.2,
+      }
+    : {
+        rpiCameraShutter: 0, // 0 = Auto
+        rpiCameraGain: 0, // 0 = Auto
+        rpiCameraBrightness: 0,
+        rpiCameraContrast: 1.0,
+      };
+
+  try {
+    // We PATCH the 'cam' path configuration.
+    // Note: Replace 'cam' with whatever your path is called in mediamtx.yml
+    const MEDIAMTX_API = "http://127.0.0.1:9997/v3/config/paths/patch/cam";
+    await axios.patch(MEDIAMTX_API, config);
+
+    res.json({ message: `Night Vision ${active ? "Enabled" : "Disabled"}` });
+  } catch (err) {
+    console.error("MediaMTX API Error:", err.message);
+    res.status(500).json({ error: "Failed to update camera settings" });
+  }
+});
+
+app.post("/api/camera/focus", async (req, res) => {
+  const { mode, secret } = req.body; // 'auto', 'near', 'normal', 'far'
+  if (secret !== "rover-alpha-99") return res.status(401).send("Unauthorized");
+
+  let settings = {};
+
+  if (mode === "auto") {
+    settings = {
+      rpiCameraAfMode: "continuous",
+    };
+  } else {
+    // Switch to manual to hold a specific position
+    settings = {
+      rpiCameraAfMode: "manual",
+      rpiCameraLensPosition:
+        mode === "near" ? 10.0 : mode === "normal" ? 5.0 : 0.0,
+    };
+  }
+
+  try {
+    await axios.patch(
+      "http://127.0.0.1:9997/v3/config/paths/patch/cam",
+      settings,
+    );
+    res.json({ message: `Focus set to ${mode}` });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to apply focus" });
+  }
+});
+
+app.post("/api/camera/resolution", async (req, res) => {
+  const { mode, secret } = req.body;
+  if (secret !== "rover-alpha-99") return res.status(401).send("Unauthorized");
+
+  const resMap = {
+    "240p": { width: 320, height: 240, fps: 60 },
+    "480p": { width: 640, height: 480, fps: 60 },
+    "720p": { width: 1280, height: 720, fps: 60 },
+    "1080p": { width: 1920, height: 1080, fps: 15 },
+  };
+
+  const target = resMap[mode] || resMap["720p"];
+
+  const settings = {
+    rpiCameraWidth: target.width,
+    rpiCameraHeight: target.height,
+  };
+
+  try {
+    await axios.patch(
+      "http://127.0.0.1:9997/v3/config/paths/patch/cam",
+      settings,
+    );
+    res.json({ message: `Resolution changed to ${mode}` });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to apply resolution" });
+  }
+});
+
+app.post("/api/camera/settings", async (req, res) => {
+  const { settings, secret } = req.body; // e.g., { rpiCameraWidth: 1920, rpiCameraHeight: 1080 }
+
+  try {
+    await axios.patch(
+      "http://127.0.0.1:9997/v3/config/paths/patch/cam",
+      settings,
+    );
+    res.json({ message: "Settings applied" });
+  } catch (err) {
+    res.status(500).send("API Error");
+  }
+});
+
 // Make sure your photos folder is served statically so you can view them
 app.use("/photos", express.static(path.join(__dirname, "photos")));
 
@@ -179,7 +306,6 @@ app.post("/api/control/drive", (req, res) => {
 });
 
 setInterval(() => {
-  console.log("A");
   const health = getSystemStats();
 
   const payload = {
@@ -197,7 +323,6 @@ setInterval(() => {
   });
 
   voltageShell.send(JSON.stringify({ command: "get_voltage" }));
-  console.log("B");
 }, 5000);
 
 wss.on("connection", (ws) => {
@@ -246,7 +371,7 @@ function getSystemStats() {
 // Helper: 3S LiPo Voltage mapping
 function calculatePercentage(v) {
   const max = 12.6;
-  const min = 10.5;
+  const min = 9;
   const pct = ((v - min) / (max - min)) * 100;
   return Math.max(0, Math.min(100, pct)).toFixed(1);
 }

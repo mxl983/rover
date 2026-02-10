@@ -4,6 +4,8 @@ export const AUDIO_STREAM_HOST = `https://${PI_SERVER_IP}:8889/mic/whep`;
 export const VIDEO_STREAM_HOST = `https://${PI_SERVER_IP}:8889/cam/whep`;
 
 export const PI_CONTROL_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/control/drive`;
+export const PI_SYSTEM_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/system/shutdown`;
+export const PI_CAMERA_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera`;
 export const PI_WEBSOCKET = `wss://${PI_SERVER_IP}:3000`;
 
 export const PI_HI_RES_CAPTURE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera/capture`;

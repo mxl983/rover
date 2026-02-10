@@ -4,24 +4,16 @@ import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
 import { ControlCluster } from "./components/ControlCluster";
 import { CaptureButton } from "./components/CaptureButton";
-import { PI_CONTROL_ENDPOINT, PI_WEBSOCKET, MQTT_HOST } from "./constants";
+import {
+  PI_CONTROL_ENDPOINT,
+  PI_WEBSOCKET,
+  MQTT_HOST,
+  PI_SYSTEM_ENDPOINT,
+  PI_CAMERA_ENDPOINT,
+} from "./constants";
 import { LoginOverlay } from "./components/LoginOverlay";
 import mqtt from "mqtt";
-
-const styles = {
-  powerBtn: {
-    width: "auto",
-    display: "inline-block",
-    border: "none",
-    padding: "12px 24px",
-    color: "#000",
-    fontWeight: "bold",
-    cursor: "pointer",
-    fontFamily: "monospace",
-    transition: "all 0.3s ease",
-  },
-  status: { color: "#666", fontSize: "9px", marginTop: "10px" },
-};
+import { SystemControls } from "./components/SystemControls";
 
 export default function App() {
   const socketRef = useRef(null);
@@ -30,6 +22,9 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessionCreds, setSessionCreds] = useState(null);
   const [isPowered, setIsPowered] = useState(true);
+  const [nvActive, setNvActive] = useState(false);
+  const [resMode, setResMode] = useState("720p");
+  const [focusMode, setFocusMode] = useState("far");
 
   let lastPingTime = useRef(0);
   let lastHeartBeat = useRef(0);
@@ -48,20 +43,7 @@ export default function App() {
 
     mqttClientRef.current = client;
 
-    // 2. Set up the Heartbeat Interval (Every 30 seconds)
-    const heartbeatInterval = setInterval(() => {
-      if (client.connected) {
-        console.log("💓 Sending Heartbeat...");
-        // We send a simple timestamp or "1" to the heartbeat topic
-        client.publish("rover/heartbeat", String(Date.now()), {
-          qos: 1,
-          retain: true,
-        });
-      }
-    }, 30000);
-
     return () => {
-      clearInterval(heartbeatInterval);
       client.end();
     };
   }, [sessionCreds]);
@@ -157,18 +139,81 @@ export default function App() {
     setIsAuthenticated(true);
   };
 
-  const handlePowerToggle = () => {
-    const nextState = !isPowered;
-    const command = nextState ? "On" : "Off";
-
-    const options = { qos: 1, retain: true };
-
-    if (mqttClientRef.current) {
-      console.log(`📡 Sending Power Command: ${command}`);
-      mqttClientRef.current.publish("rover/power/pi", command, options);
-      mqttClientRef.current.publish("rover/power/aux", command, options);
-      setIsPowered(nextState);
+  const handleSystemAction = async (type) => {
+    if (type === "boot") {
+      // Logic for ESP32 to turn relay back on
+      mqttClientRef.current?.publish("rover/power/pi", "On", {
+        qos: 1,
+        retain: true,
+      });
+      setIsPowered(true);
+      return;
     }
+
+    const confirm = window.confirm(`Confirm ${type}?`);
+    if (!confirm) return;
+
+    try {
+      // Use the logic we built: Shutdown uses /shutdown, Reboot uses /reboot
+      const endpoint = `${PI_SYSTEM_ENDPOINT}/${type}`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (res.ok) {
+        if (type === "shutdown") {
+          // Tell ESP32 to kill power after the OS has time to park (15s)
+          mqttClientRef.current?.publish("rover/power/pi", "Off 15000", {
+            qos: 1,
+          });
+          setIsPowered(false);
+        }
+        // If rebooting, we just wait for the ping to come back
+      }
+    } catch (err) {
+      console.error("System action failed", err);
+    }
+  };
+
+  const handleNVToggle = async (requestedState) => {
+    try {
+      const res = await fetch(`${PI_CAMERA_ENDPOINT}/nightvision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active: requestedState,
+          secret: "rover-alpha-99",
+        }),
+      });
+
+      if (res.ok) {
+        setNvActive(requestedState);
+        console.log(`Night Vision ${requestedState ? "ON" : "OFF"}`);
+      }
+    } catch (err) {
+      console.error("Failed to toggle Night Vision:", err);
+    }
+  };
+
+  const handleResChange = async (newMode) => {
+    // Same fetch logic as before, just sending 'newMode' (e.g., '1080p')
+    const res = await fetch(`${PI_CAMERA_ENDPOINT}/resolution`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: newMode, secret: "rover-alpha-99" }),
+    });
+    if (res.ok) setResMode(newMode);
+  };
+
+  const handleFocusChange = async (newMode) => {
+    const res = await fetch(`${PI_CAMERA_ENDPOINT}/focus`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: newMode, secret: "rover-alpha-99" }),
+    });
+    if (res.ok) setFocusMode(newMode);
   };
 
   return (
@@ -185,20 +230,16 @@ export default function App() {
               style={{ display: "flex", flexDirection: "column", gap: "10px" }}
             >
               <div>IMX708 // {new Date().toLocaleTimeString()}</div>
-              {
-                <button
-                  onClick={handlePowerToggle}
-                  style={{
-                    ...styles.powerBtn,
-                    backgroundColor: isPowered ? "#ff4444" : "#00f2ff",
-                    boxShadow: isPowered
-                      ? "0 0 15px #ff444466"
-                      : "0 0 15px #00f2ff66",
-                  }}
-                >
-                  {isPowered ? "SHUTDOWN_ROVER" : "BOOT_ROVER"}
-                </button>
-              }
+              <SystemControls
+                isPowered={isPowered}
+                nvActive={nvActive}
+                resMode={resMode}
+                onNVToggle={handleNVToggle}
+                onResChange={handleResChange}
+                onAction={handleSystemAction}
+                focusMode={focusMode}
+                onFocusChange={handleFocusChange}
+              />
             </div>
           </div>
 
