@@ -14,6 +14,7 @@ import {
 import { LoginOverlay } from "./components/LoginOverlay";
 import mqtt from "mqtt";
 import { SystemControls } from "./components/SystemControls";
+import { WifiSignal } from "./components/WifiSignal";
 
 export default function App() {
   const socketRef = useRef(null);
@@ -30,6 +31,10 @@ export default function App() {
   let lastHeartBeat = useRef(0);
 
   const mqttClientRef = useRef(null);
+
+  useEffect(() => {
+    setIsPowered(piOnline);
+  }, [piOnline]);
 
   // WS connection with MQTT
   useEffect(() => {
@@ -92,6 +97,13 @@ export default function App() {
     connect();
 
     const pingInterval = setInterval(() => {
+      if (document.hidden) {
+        // Tab is minified or inactive.
+        // We do NOTHING, so the server doesn't get a PING.
+        console.log("Tab hidden: PING suspended.");
+        return;
+      }
+
       // Only ping if the socket is actually open
       if (socket && socket.readyState === WebSocket.OPEN) {
         lastPingTime.current = Date.now();
@@ -144,7 +156,9 @@ export default function App() {
       // Logic for ESP32 to turn relay back on
       mqttClientRef.current?.publish("rover/power/pi", "On", {
         qos: 1,
-        retain: true,
+      });
+      mqttClientRef.current?.publish("rover/power/aux", "On", {
+        qos: 1,
       });
       setIsPowered(true);
       return;
@@ -216,6 +230,15 @@ export default function App() {
     if (res.ok) setFocusMode(newMode);
   };
 
+  const toggleLight = async (state) => {
+    const res = await fetch(`${PI_SYSTEM_ENDPOINT}/usb-power`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: state }),
+    });
+    if (!res.ok) console.error("Failed to toggle light");
+  };
+
   return (
     <div className="viewport">
       {!isAuthenticated && <LoginOverlay onLoginSuccess={handleLoginSuccess} />}
@@ -224,7 +247,15 @@ export default function App() {
       {isAuthenticated && (
         <div className="hud-overlay">
           <div className="hud-header">
-            <div className="glass-card">Mango Rover V1.0</div>
+            <div
+              className="glass-card"
+              style={{ display: "flex", alignItems: "flex-end", gap: "10px" }}
+            >
+              <div>Mango Rover V1.0</div>{" "}
+              {stats?.wifiSignal && (
+                <WifiSignal dbm={stats.wifiSignal}></WifiSignal>
+              )}
+            </div>
             <div
               className="glass-card"
               style={{ display: "flex", flexDirection: "column", gap: "10px" }}
@@ -259,7 +290,14 @@ export default function App() {
                 gap: "20px",
               }}
             >
-              <ControlCluster onDrive={handleDriveUpdate} />
+              <ControlCluster
+                onDrive={handleDriveUpdate}
+                usbPower={stats.usbPower}
+                onLightToggle={() => {
+                  const nextState = stats.usbPower === "on" ? "off" : "on";
+                  toggleLight(nextState);
+                }}
+              />
               <CaptureButton></CaptureButton>
             </div>
           </div>

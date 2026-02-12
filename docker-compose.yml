@@ -34,7 +34,7 @@ services:
   control_server:
     build: .
     container_name: control_server
-    working_dir: /app
+    working_dir: /app/src
     privileged: true
     user: "root" # Crucial for vcgencmd access
     group_add:
@@ -66,6 +66,8 @@ services:
     depends_on:
       - mediamtx
     restart: always
+    env_file:
+      - .env
 
 networks:
   rover-net:

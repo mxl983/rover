@@ -6,7 +6,9 @@ RUN install_packages \
     python3-smbus \
     i2c-tools \
     libcamera-apps-lite \
-    docker.io
+    docker.io \
+    uhubctl \ 
+    wireless-tools
 
 WORKDIR /app
 

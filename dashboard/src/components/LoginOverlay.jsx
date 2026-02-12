@@ -32,7 +32,7 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
       const topic1 = "rover/power/pi";
       const topic2 = "rover/power/aux";
       const payload = "On";
-      const options = { qos: 1, retain: true };
+      const options = { qos: 1 };
 
       // Use a counter to ensure both are finished before closing
       let completed = 0;

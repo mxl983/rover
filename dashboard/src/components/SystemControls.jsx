@@ -148,6 +148,7 @@ const styles = {
     appearance: "none",
   },
   bootBtn: {
+    width: "auto",
     height: "22px",
     backgroundColor: "#00f2ff",
     border: "none",

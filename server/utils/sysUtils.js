@@ -2,6 +2,25 @@ import fs from "fs";
 import { execSync } from "child_process";
 let startTime = Date.now();
 
+export function getWifiSignal() {
+  try {
+    // Executes the command and captures the output
+    const cmd = "iwconfig wlan0 | grep 'Signal level'";
+    const output = execSync(cmd).toString();
+
+    // Uses Regex to find the "-XX dBm" part
+    const match = output.match(/Signal level=(-?\d+) dBm/);
+
+    if (match && match[1]) {
+      return parseInt(match[1]); // Returns -30, -50, etc.
+    }
+    return 0;
+  } catch (e) {
+    // If wlan0 doesn't exist (like on Ethernet), return 0
+    return 0;
+  }
+}
+
 export function getCpuTemp() {
   try {
     const tempRaw = execSync("vcgencmd measure_temp").toString();
