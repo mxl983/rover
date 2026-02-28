@@ -1,5 +1,13 @@
-import React from "react";
-import { Power, RefreshCw, Moon, Sun, Settings, Focus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Power,
+  RefreshCw,
+  Moon,
+  Sun,
+  Settings,
+  Focus,
+  ChevronRight,
+} from "lucide-react";
 
 export const SystemControls = ({
   isPowered,
@@ -10,7 +18,15 @@ export const SystemControls = ({
   onResChange,
   onFocusChange,
   onAction,
+  onExpandChange, // New prop to notify parent
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Notify parent when expansion state changes
+  useEffect(() => {
+    onExpandChange?.(isExpanded);
+  }, [isExpanded, onExpandChange]);
+
   if (!isPowered)
     return (
       <button onClick={() => onAction("boot")} style={styles.bootBtn}>
@@ -18,21 +34,26 @@ export const SystemControls = ({
       </button>
     );
 
+  // --- COLLAPSED STATE (Bare Icon) ---
+  if (!isExpanded) {
+    return (
+      <div style={styles.expandedWrapper}>
+        <div style={styles.controlWrapper}>
+          <Settings
+            size={16}
+            style={styles.bareIcon}
+            onClick={() => setIsExpanded(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // --- EXPANDED STATE ---
   return (
-    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-      {/* Focus Dropdown */}
-      <div
-        style={{ position: "relative", display: "flex", alignItems: "center" }}
-      >
-        <Focus
-          size={10}
-          style={{
-            position: "absolute",
-            left: "6px",
-            color: "#00f2ff",
-            pointerEvents: "none",
-          }}
-        />
+    <div style={styles.expandedWrapper}>
+      <div style={styles.controlWrapper}>
+        <Focus size={10} style={styles.iconOverlay} />
         <select
           value={focusMode}
           onChange={(e) => onFocusChange(e.target.value)}
@@ -45,19 +66,8 @@ export const SystemControls = ({
         </select>
       </div>
 
-      {/* Resolution Dropdown */}
-      <div
-        style={{ position: "relative", display: "flex", alignItems: "center" }}
-      >
-        <Settings
-          size={10}
-          style={{
-            position: "absolute",
-            left: "6px",
-            color: "#00f2ff",
-            pointerEvents: "none",
-          }}
-        />
+      <div style={styles.controlWrapper}>
+        <Settings size={10} style={styles.iconOverlay} />
         <select
           value={resMode}
           onChange={(e) => onResChange(e.target.value)}
@@ -70,40 +80,48 @@ export const SystemControls = ({
         </select>
       </div>
 
-      {/* Night Vision Toggle */}
       <button
         onClick={() => onNVToggle(!nvActive)}
-        style={{
-          ...styles.baseBtn,
-          backgroundColor: nvActive ? "#5522ff44" : "#33333322",
-          color: nvActive ? "#b099ff" : "#888",
-          display: "flex",
-        }}
+        style={{ ...styles.baseBtn, color: nvActive ? "#b099ff" : "#888" }}
       >
         {nvActive ? <Moon size={12} /> : <Sun size={12} />}
         <span style={{ fontSize: "9px" }}>NV</span>
       </button>
 
-      {/* Reboot & Shutdown */}
-      <button
-        onClick={() => onAction("reboot")}
-        style={styles.baseBtn}
-        title="Reboot"
-      >
+      <button onClick={() => onAction("reboot")} style={styles.baseBtn}>
         <RefreshCw size={12} />
       </button>
-      <button
-        onClick={() => onAction("shutdown")}
-        style={styles.baseBtn}
-        title="Power Off"
-      >
+      <button onClick={() => onAction("shutdown")} style={styles.powerBtn}>
         <Power size={12} />
       </button>
+
+      <ChevronRight
+        size={18}
+        style={styles.bareIcon}
+        onClick={() => setIsExpanded(false)}
+      />
     </div>
   );
 };
 
 const styles = {
+  bareIcon: {
+    color: "#00f2ff",
+    cursor: "pointer",
+    opacity: 0.7,
+    transition: "opacity 0.2s",
+    padding: "4px",
+  },
+  expandedWrapper: {
+    display: "flex",
+    gap: "6px",
+    alignItems: "center",
+    background: "rgba(0,0,0,0.6)",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    border: "1px solid rgba(0, 242, 255, 0.2)",
+    animation: "appear 0.2s ease-out",
+  },
   controlWrapper: {
     position: "relative",
     display: "flex",
@@ -114,41 +132,40 @@ const styles = {
     left: "6px",
     color: "#00f2ff",
     pointerEvents: "none",
-    zIndex: 1,
   },
   baseBtn: {
-    height: "22px", // Fixed height to match dropdown
-    boxSizing: "border-box",
+    height: "22px",
     padding: "0 8px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    fontFamily: "monospace",
+    display: "flex",
     alignItems: "center",
     gap: "4px",
-    borderRadius: "2px",
-    fontSize: "10px",
-    backgroundColor: "#b70101",
-    color: "#ffffff",
+    backgroundColor: "#1a1a1a",
+    color: "#00f2ff",
     border: "1px solid #00f2ffaa",
-    transition: "all 0.2s ease",
-    outline: "none",
+    borderRadius: "2px",
+    cursor: "pointer",
+  },
+  powerBtn: {
+    height: "22px",
+    padding: "0 8px",
+    backgroundColor: "#b70101",
+    color: "#fff",
+    border: "1px solid #ff4444",
+    borderRadius: "2px",
+    cursor: "pointer",
   },
   dropdown: {
-    height: "22px", // Matching height
-    boxSizing: "border-box",
+    height: "22px",
     backgroundColor: "#1a1a1a",
     color: "#00f2ff",
     border: "1px solid #00f2ffaa",
     borderRadius: "2px",
     fontSize: "10px",
-    fontFamily: "monospace",
-    padding: "0 6px 0 20px",
-    cursor: "pointer",
-    outline: "none",
+    padding: "0 4px 0 20px",
     appearance: "none",
+    cursor: "pointer",
   },
   bootBtn: {
-    width: "auto",
     height: "22px",
     backgroundColor: "#00f2ff",
     border: "none",
@@ -156,10 +173,5 @@ const styles = {
     borderRadius: "2px",
     fontWeight: "bold",
     cursor: "pointer",
-    alignItems: "center",
-    gap: "6px",
-    fontFamily: "monospace",
-    fontSize: "10px",
-    color: "#000",
   },
 };

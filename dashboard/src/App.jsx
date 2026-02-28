@@ -3,29 +3,36 @@ import { VideoStream } from "./components/VideoStream";
 import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
 import { ControlCluster } from "./components/ControlCluster";
-import { CaptureButton } from "./components/CaptureButton";
 import {
   PI_CONTROL_ENDPOINT,
   PI_WEBSOCKET,
   MQTT_HOST,
   PI_SYSTEM_ENDPOINT,
   PI_CAMERA_ENDPOINT,
+  PI_DOCKING_ENDPOINT,
+  PI_HI_RES_CAPTURE_ENDPOINT,
 } from "./constants";
 import { LoginOverlay } from "./components/LoginOverlay";
 import mqtt from "mqtt";
 import { SystemControls } from "./components/SystemControls";
 import { WifiSignal } from "./components/WifiSignal";
+import { DriveAssistHUD } from "./components/DriveAssistHUD";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { RoverSchematic } from "./components/RoverSchematic";
 
 export default function App() {
   const socketRef = useRef(null);
   const [stats, setStats] = useState({});
   const [piOnline, setPiOnline] = useState(false);
+  const [espOnline, setEspOnline] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessionCreds, setSessionCreds] = useState(null);
   const [isPowered, setIsPowered] = useState(true);
   const [nvActive, setNvActive] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [resMode, setResMode] = useState("720p");
   const [focusMode, setFocusMode] = useState("far");
+  const [compact, setCompact] = useState(true);
 
   let lastPingTime = useRef(0);
   let lastHeartBeat = useRef(0);
@@ -47,6 +54,18 @@ export default function App() {
     });
 
     mqttClientRef.current = client;
+
+    client.subscribe("rover/esp/heartbeat", (err) => {
+      if (!err) {
+        console.log("📥 Subscribed to ESP32 Heartbeat");
+      }
+    });
+
+    client.on("message", (topic) => {
+      if (topic === "rover/esp/heartbeat") {
+        setEspOnline(true);
+      }
+    });
 
     return () => {
       client.end();
@@ -130,7 +149,7 @@ export default function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ keys: keysArray }),
+        body: JSON.stringify(keysArray),
       });
 
       if (!response.ok) {
@@ -239,17 +258,63 @@ export default function App() {
     if (!res.ok) console.error("Failed to toggle light");
   };
 
+  const toggleDocking = async (isEnable) => {
+    await fetch(PI_DOCKING_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: isEnable }),
+    });
+  };
+
+  const handleCapture = async () => {
+    setIsCapturing(true);
+    try {
+      const res = await fetch(PI_HI_RES_CAPTURE_ENDPOINT, { method: "POST" });
+      const data = await res.json();
+      window.open(data.url, "_blank");
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleCameraReset = async () => {
+    console.log("Resetting gimbal to 90/90 center...");
+    const payload = { command: "reset_servos" };
+    try {
+      const response = await fetch(PI_CONTROL_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        console.warn("Server responded with an error");
+      }
+    } catch (error) {
+      console.error("Network error sending drive command:", error);
+    }
+  };
+
   return (
     <div className="viewport">
       {!isAuthenticated && <LoginOverlay onLoginSuccess={handleLoginSuccess} />}
-      <VideoStream />
+      <VideoStream dockingData={stats.docking} />
+      <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
       {isAuthenticated && (
         <div className="hud-overlay">
           <div className="hud-header">
             <div
               className="glass-card"
-              style={{ display: "flex", alignItems: "flex-end", gap: "10px" }}
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: "10px",
+                padding: "5px",
+                border: "none",
+              }}
             >
               <div>Mango Rover V1.0</div>{" "}
               {stats?.wifiSignal && (
@@ -258,9 +323,14 @@ export default function App() {
             </div>
             <div
               className="glass-card"
-              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                border: "none",
+                padding: "0px",
+              }}
             >
-              <div>IMX708 // {new Date().toLocaleTimeString()}</div>
               <SystemControls
                 isPowered={isPowered}
                 nvActive={nvActive}
@@ -275,13 +345,47 @@ export default function App() {
           </div>
 
           <div className="hud-footer">
-            <div className="drive-control-monitor glass-card">
-              <SubsystemItem
-                label="PI_SERVER"
-                dotColor={piOnline ? "green" : "red"}
+            {compact && (
+              <RoverSchematic
+                pan={stats.pan}
+                battery={stats.battery}
+                isOffline={!piOnline}
+                handleClick={() => {
+                  console.log(123);
+                  setCompact(false);
+                }}
               />
-              <Meters stats={stats} />
-            </div>
+            )}
+            {!compact && (
+              <div
+                className="drive-control-monitor glass-card"
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingRight: "0px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <SubsystemItem
+                    label="PI_SERVER"
+                    dotColor={piOnline ? "green" : "red"}
+                  />
+                  <SubsystemItem
+                    label="ESP32"
+                    dotColor={espOnline ? "green" : "red"}
+                  />
+                  <Meters stats={stats} compact={compact} />
+                </div>
+                <ChevronLeft onClick={() => setCompact(true)} />
+              </div>
+            )}
 
             <div
               style={{
@@ -290,15 +394,23 @@ export default function App() {
                 gap: "20px",
               }}
             >
-              <ControlCluster
-                onDrive={handleDriveUpdate}
-                usbPower={stats.usbPower}
-                onLightToggle={() => {
-                  const nextState = stats.usbPower === "on" ? "off" : "on";
-                  toggleLight(nextState);
-                }}
-              />
-              <CaptureButton></CaptureButton>
+              {piOnline ? (
+                <>
+                  <ControlCluster
+                    onDockingToggle={toggleDocking}
+                    onDrive={handleDriveUpdate}
+                    usbPower={stats.usbPower}
+                    onLightToggle={() => {
+                      const nextState = stats.usbPower === "on" ? "off" : "on";
+                      toggleLight(nextState);
+                    }}
+                    isDockingMode={stats.isDockingMode}
+                    onCapture={handleCapture}
+                    isCapturing={isCapturing}
+                    onReset={handleCameraReset}
+                  />
+                </>
+              ) : null}
             </div>
           </div>
         </div>

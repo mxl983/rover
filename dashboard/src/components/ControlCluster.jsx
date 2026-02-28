@@ -1,151 +1,172 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-// If you have lucide-react installed, uncomment the next line:
-import { Lightbulb, LightbulbOff } from "lucide-react";
 
-export const ControlCluster = ({ onDrive, onLightToggle, usbPower }) => {
+const CONTROL_CONFIG = [
+  { key: "w", label: "W", grid: 2 },
+  { key: "a", label: "A", grid: 5 },
+  { key: "s", label: "S", grid: 6 },
+  { key: "d", label: "D", grid: 7 },
+  { key: "arrowup", label: "▲", grid: 10, python: "ArrowUp", hint: "UP" },
+  { key: "arrowleft", label: "◀", grid: 13, python: "ArrowLeft", hint: "L" },
+  { key: "arrowdown", label: "▼", grid: 14, python: "ArrowDown", hint: "DN" },
+  { key: "arrowright", label: "▶", grid: 15, python: "ArrowRight", hint: "R" },
+  { key: "f", label: "💡", grid: 16, type: "action", hint: "F" },
+  { key: "g", label: "🎯", grid: 12, type: "action", hint: "G" },
+  { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
+  { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
+];
+
+export const ControlCluster = ({
+  onDrive,
+  onLightToggle,
+  onDockingToggle,
+  onCapture,
+  onReset,
+  usbPower,
+  isDockingMode,
+  isCapturing,
+}) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
   const prevKeysRef = useRef("");
-  const isLightOn = usbPower === "on";
 
-  const controlMap = [
-    { key: null, label: "" },
-    { key: "w", label: "W" },
-    { key: null, label: "" },
-    { key: null, label: "" },
-    { key: "a", label: "A" },
-    { key: "s", label: "S" },
-    { key: "d", label: "D" },
-    { key: "f", label: "F", type: "toggle" },
-  ];
+  const updateAction = useCallback(
+    (key, isDown) => {
+      const conf = CONTROL_CONFIG.find((c) => c.key === key);
+      if (!conf) return;
 
-  const syncState = useCallback(
-    (nextKeys) => {
-      const movementKeys = Array.from(nextKeys)
-        .filter((k) => k !== "f")
-        .sort();
-      const keysString = movementKeys.join("");
-      if (keysString !== prevKeysRef.current) {
-        onDrive(movementKeys);
-        prevKeysRef.current = keysString;
-      }
-    },
-    [onDrive],
-  );
-
-  const startAction = useCallback(
-    (key) => {
-      if (key === "f") {
-        onLightToggle();
+      // Handle Action Buttons (Toggles/Captures)
+      if (isDown && conf.type === "action") {
+        if (key === "f") onLightToggle();
+        if (key === "g") onDockingToggle(!isDockingMode);
+        if (key === "c") onCapture();
+        if (key === "r") onReset();
         return;
       }
-      setActiveKeys((prev) => {
-        const next = new Set(prev).add(key);
-        syncState(next);
-        return next;
-      });
-    },
-    [syncState, onLightToggle],
-  );
 
-  const stopAction = useCallback(
-    (key) => {
-      if (key === "f") return;
+      // Handle Drive Keys
       setActiveKeys((prev) => {
         const next = new Set(prev);
-        next.delete(key);
-        syncState(next);
+        isDown ? next.add(key) : next.delete(key);
+
+        const activeList = Array.from(next)
+          .map((k) => CONTROL_CONFIG.find((c) => c.key === k)?.python || k)
+          .filter((k) => k.length <= 1 || k.startsWith("Arrow"))
+          .sort();
+
+        const keysString = activeList.join("");
+        if (keysString !== prevKeysRef.current) {
+          onDrive(activeList);
+          prevKeysRef.current = keysString;
+        }
         return next;
       });
     },
-    [syncState],
+    [
+      onDrive,
+      onLightToggle,
+      onDockingToggle,
+      onCapture,
+      onReset,
+      isDockingMode,
+    ],
   );
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    // Keyboard Event Handlers
+    const handleKeyEvent = (e) => {
+      if (e.repeat) return;
       const key = e.key.toLowerCase();
-      if (["w", "a", "s", "d", "f"].includes(key) && !activeKeys.has(key)) {
-        startAction(key);
-      }
-    };
-    const handleKeyUp = (e) => {
-      const key = e.key.toLowerCase();
-      if (["w", "a", "s", "d"].includes(key)) stopAction(key);
+      if (key.startsWith("arrow")) e.preventDefault();
+      updateAction(key, e.type === "keydown");
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+    // Global Safety: If user switches tabs or window loses focus, STOP the rover
+    const handleBlur = () => {
+      setActiveKeys(new Set());
+      onDrive([]);
+      prevKeysRef.current = "";
     };
-  }, [activeKeys, startAction, stopAction]);
+
+    window.addEventListener("keydown", handleKeyEvent);
+    window.addEventListener("keyup", handleKeyEvent);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyEvent);
+      window.removeEventListener("keyup", handleKeyEvent);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [updateAction, onDrive]);
 
   return (
-    <div className="control-cluster">
+    <div className="wasd-controls">
       <style>{`
         .wasd-controls { 
           display: grid; 
-          grid-template-columns: repeat(4, 45px); 
-          gap: 5px; 
+          grid-template-columns: repeat(4, 46px); 
+          gap: 6px; 
+          background: rgba(0,0,0,0.4); 
+          padding: 12px;
           user-select: none;
+          touch-action: none; /* Prevents page scrolling/zooming while driving */
         }
-        .control-btn {
-          width: 45px; height: 45px; background: rgba(0, 0, 0, 0.7); color: #00f2ff;
-          border: 1px solid #00f2ff; border-radius: 6px; cursor: pointer; font-weight: bold;
-          transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center;
-          touch-action: none; font-size: 14px;
+        .btn { 
+          width: 46px; 
+          height: 46px; 
+          background: rgba(0,0,0,0.8); 
+          color: #00f2ff; 
+          border: 1px solid #00f2ff; 
+          cursor: pointer; 
+          display: flex; 
+          flex-direction: column; 
+          align-items: center; 
+          justify-content: center; 
+          font-size: 16px; 
+          font-weight: bold;
+          outline: none;
+          /* Critical Mobile Fixes: */
+          -webkit-tap-highlight-color: transparent;
+          -webkit-touch-callout: none;
+          touch-action: none; 
         }
-        .control-btn.active {
-          background: #00f2ff; color: #000; box-shadow: 0 0 15px #00f2ff; transform: scale(0.92);
-        }
-        /* Glowing Yellow for the Light */
-        .control-btn.light-active {
-          background: #ffea00; color: #000; border-color: #fff;
-          box-shadow: 0 0 20px #ffea00, inset 0 0 10px rgba(255,255,255,0.8);
-        }
-        .key-hint { font-size: 9px; opacity: 0.6; margin-top: -2px; }
+        .active { background: #00f2ff !important; color: #000 !important; }
+        .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
+        .dock-on { background: #00ff41 !important; color: #000; border-color: #00ff41; }
+        .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; }
       `}</style>
 
-      <div className="wasd-controls">
-        {controlMap.map((item, index) =>
-          item.label === "" ? (
-            <div key={index} />
-          ) : (
-            <button
-              key={index}
-              className={`control-btn ${
-                item.key === "f" && isLightOn
-                  ? "light-active"
-                  : activeKeys.has(item.key)
-                    ? "active"
-                    : ""
-              }`}
-              onMouseDown={() => startAction(item.key)}
-              onMouseUp={() => stopAction(item.key)}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                startAction(item.key);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                stopAction(item.key);
-              }}
-            >
-              {/* If key is F, show Bulb icon, else show Label */}
-              {item.key === "f" ? (
-                <div style={{ display: "flex", flexDirection: "row" }}>
-                  <span style={{ fontSize: "18px" }}>
-                    {isLightOn ? "💡" : "outline" === "outline" ? "💡" : "💡"}
-                  </span>
-                  <span className="key-hint">F</span>
-                </div>
-              ) : (
-                item.label
-              )}
-            </button>
-          ),
-        )}
-      </div>
+      {Array.from({ length: 16 }).map((_, i) => {
+        const conf = CONTROL_CONFIG.find((c) => c.grid === i + 1);
+        if (!conf) return <div key={i} />;
+
+        return (
+          <button
+            key={i}
+            className={`btn ${activeKeys.has(conf.key) ? "active" : ""} 
+              ${conf.key === "f" && usbPower === "on" ? "light-on" : ""}
+              ${conf.key === "g" && isDockingMode ? "dock-on" : ""}`}
+            // Mouse Handlers
+            onMouseDown={() => updateAction(conf.key, true)}
+            onMouseUp={() => updateAction(conf.key, false)}
+            onMouseLeave={() => updateAction(conf.key, false)} // Safety: stop if mouse slips off
+            // Touch Handlers (Snappy for Tablet/Phone)
+            onTouchStart={(e) => {
+              e.preventDefault(); // Stop ghost clicks and scroll
+              updateAction(conf.key, true);
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              updateAction(conf.key, false);
+            }}
+            onTouchCancel={(e) => {
+              e.preventDefault();
+              updateAction(conf.key, false);
+            }}
+          >
+            {conf.label}
+            {conf.hint && <span className="hint">{conf.hint}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 };

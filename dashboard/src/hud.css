@@ -154,7 +154,6 @@ html {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 8px;
 }
 
 .stat-label {
@@ -283,6 +282,7 @@ button:active {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  align-items: center;
 }
 
 .meter-row {
@@ -295,9 +295,9 @@ button:active {
 .drive-control-monitor {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 10px;
   border-left: 3px solid var(--spacex-cyan);
-  min-width: 280px;
+  /* min-width: 280px; */
 }
 
 /* Add this to your CSS file */
@@ -345,4 +345,8 @@ button:active {
 .energy-line {
   /* Use 'linear' to keep the speed constant */
   animation: flux-glow 1s linear infinite;
+}
+
+.stat {
+  padding: 3px;
 }

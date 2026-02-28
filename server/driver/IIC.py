@@ -172,10 +172,11 @@ def set_motor_parameter():
     set_pluse_line(11)
     time.sleep(0.1)
     # 配置轮子直径，测量得出  Configure the wheel diameter and measure it
-    set_wheel_dis(67.00)
+    set_wheel_dis(85.00)
     time.sleep(0.1)
     # 配置电机死区，实验得出  Configure the motor dead zone, and the experiment shows
-    set_motor_deadzone(1600)
+    # set_motor_deadzone(1600)
+    set_motor_deadzone(1850)
     time.sleep(0.1)
 
   elif MOTOR_TYPE == 2:
