@@ -3,11 +3,10 @@ import PropTypes from "prop-types";
 import nipplejs from "nipplejs";
 
 const ZONE_SIZE_PX = 160;
-const ZONE_SIZE_SMALL_PX = 120;
-const RESET_BTN_SIZE = 50;
+const RESET_BTN_SIZE = 42; 
 const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
-const NEUTRAL_BTN = "rgba(255, 255, 255, 0.25)";
+const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
 
 export const DualJoystickControls = ({ onDrive, onReset, children }) => {
   const leftZoneRef = useRef(null);
@@ -17,6 +16,7 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
   const onDriveRef = useRef(onDrive);
   const activeKeys = useRef({ drive: "", look: "" });
 
+  // Keep the drive callback up to date without re-triggering the effect
   useEffect(() => {
     onDriveRef.current = onDrive;
   }, [onDrive]);
@@ -29,7 +29,7 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
     const commonOptions = {
       mode: "static",
       position: { left: "50%", top: "50%" },
-      size: 130,
+      size: 110,
       threshold: 0.1,
       catchDistance: 150,
     };
@@ -37,13 +37,13 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
     const driveManager = nipplejs.create({
       ...commonOptions,
       zone: leftEl,
-      color: "#8a8a8a",
+      color: "rgba(255, 255, 255, 0.3)",
     });
 
     const lookManager = nipplejs.create({
       ...commonOptions,
       zone: rightEl,
-      color: "#8a8a8a",
+      color: "rgba(255, 255, 255, 0.3)",
     });
 
     managersRef.current.drive = driveManager;
@@ -58,6 +58,7 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
       }
     };
 
+    // Drive Listeners
     driveManager.on("move", (evt, data) => {
       if (!data.direction) return;
       const map = { up: "w", down: "s", left: "a", right: "d" };
@@ -73,13 +74,12 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
       syncState();
     });
 
+    // Look (Gimbal) Listeners
     lookManager.on("move", (evt, data) => {
       if (!data.direction) return;
       const map = {
-        up: "ArrowUp",
-        down: "ArrowDown",
-        left: "ArrowLeft",
-        right: "ArrowRight",
+        up: "ArrowUp", down: "ArrowDown",
+        left: "ArrowLeft", right: "ArrowRight",
       };
       const key = map[data.direction.angle];
       if (activeKeys.current.look !== key) {
@@ -96,13 +96,11 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
     return () => {
       driveManager.destroy();
       lookManager.destroy();
-      managersRef.current.drive = null;
-      managersRef.current.look = null;
     };
   }, []);
 
   return (
-    <div className="joystick-hud-container" role="group" aria-label="Dual joystick controls">
+    <div className="joystick-hud-container">
       <style>{`
         .joystick-hud-container {
           position: fixed;
@@ -110,139 +108,134 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
           left: 0;
           right: 0;
           width: 100%;
-          min-height: 200px;
-          height: max(200px, 22vh);
-          max-height: 260px;
+          height: 220px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: clamp(8px, 3vw, 24px);
-          padding: 12px clamp(16px, 5vw, 100px) max(12px, env(safe-area-inset-bottom)) clamp(16px, 5vw, 100px);
+          padding: 0 5vw 20px 5vw;
           box-sizing: border-box;
           pointer-events: none;
           z-index: 9999;
         }
-        .joystick-hud-container > * {
-          pointer-events: auto;
-        }
-        .j-zone {
-          width: min(${ZONE_SIZE_PX}px, 40vw);
-          height: min(${ZONE_SIZE_PX}px, 40vw);
-          min-width: ${ZONE_SIZE_SMALL_PX}px;
-          min-height: ${ZONE_SIZE_SMALL_PX}px;
-          aspect-ratio: 1;
+
+        /* Fixed container size prevents shifting layout */
+        .joystick-wrapper {
+          position: relative;
+          width: ${ZONE_SIZE_PX}px;
+          height: ${ZONE_SIZE_PX}px;
+          pointer-events: none;
           flex-shrink: 0;
-          background: rgba(0, 0, 0, 0.4);
+        }
+
+        .j-zone {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.3);
           border: 1px solid ${NEUTRAL_BORDER};
           border-radius: 50%;
-          position: relative;
+          pointer-events: auto;
           touch-action: none;
-          -webkit-tap-highlight-color: transparent;
-          box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+          box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
         }
-        .j-zone::after {
-          content: '';
-          display: block;
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
-          pointer-events: none;
-        }
-        @media (max-width: 380px) {
-          .j-zone {
-            width: ${ZONE_SIZE_SMALL_PX}px;
-            height: ${ZONE_SIZE_SMALL_PX}px;
-          }
-        }
+
         .j-label {
           position: absolute;
-          top: -22px;
+          top: -24px;
           left: 0;
           right: 0;
           text-align: center;
-          font-family: 'Segoe UI', sans-serif;
-          font-size: clamp(9px, 2.2vw, 11px);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-size: 10px;
           letter-spacing: 0.12em;
-          font-weight: 600;
-          text-shadow: 0 0 12px rgba(0,0,0,0.9);
+          text-transform: uppercase;
+          font-weight: 700;
           pointer-events: none;
+          color: ${NEUTRAL_LABEL};
         }
-        .reset-btn {
+
+        .reset-btn-sibling {
+          position: absolute;
+          /* Fixed offset outside the circle */
+          top: -8px;
+          left: -8px;
           width: ${RESET_BTN_SIZE}px;
           height: ${RESET_BTN_SIZE}px;
-          min-width: 44px;
-          min-height: 44px;
-          border-radius: 50%;
+          border-radius: 20px;
           background: ${NEUTRAL_BTN};
-          border: 1px solid rgba(255, 255, 255, 0.35);
-          color: rgba(255, 255, 255, 0.9);
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 0.05em;
-          cursor: pointer;
+          border: 1.5px solid #00f2ff;
+          color: #00f2ff;
+          font-size: 10px;
+          font-weight: 800;
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
-          box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
-          flex-shrink: 0;
+          cursor: pointer;
+          pointer-events: auto;
+          z-index: 10001; 
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 255, 0.2);
+          /* Transitioning only non-layout properties for stability */
+          transition: transform 0.1s, background 0.15s, color 0.15s;
+          user-select: none;
           -webkit-tap-highlight-color: transparent;
-          touch-action: manipulation;
         }
-        .reset-btn:hover {
-          background: rgba(255, 255, 255, 0.35);
-          box-shadow: 0 0 16px rgba(0, 0, 0, 0.25);
-        }
-        .reset-btn:active {
-          transform: scale(0.92);
-          background: rgba(255, 255, 255, 0.5);
+        
+        .reset-btn-sibling:active {
+          transform: scale(0.9);
+          background: #00f2ff;
           color: #000;
         }
-        .reset-btn:focus-visible {
-          outline: 2px solid rgba(255, 255, 255, 0.8);
-          outline-offset: 2px;
-        }
-        .joystick-center {
+
+        .center-slot {
+          flex: 1;
           display: flex;
           flex-direction: column;
-          align-items: center;
           justify-content: center;
-          gap: 4px;
-          flex-shrink: 0;
+          align-items: center;
+          pointer-events: none;
+          gap: 12px;
         }
-        .joystick-center-slot {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 0;
-          padding-bottom: 4px;
+        .center-slot > * {
+          pointer-events: auto;
         }
       `}</style>
 
-      <div ref={leftZoneRef} className="j-zone" aria-label="Drive joystick (WASD)">
-        <div className="j-label" style={{ color: NEUTRAL_LABEL }}>
-          DRIVE
+      {/* LEFT JOYSTICK: DRIVE */}
+      <div className="joystick-wrapper">
+        <div ref={leftZoneRef} className="j-zone">
+          <div className="j-label">Drive</div>
         </div>
       </div>
 
-      <div className="joystick-center">
+      {/* HUD CENTER: (Schematics, Status, etc.) */}
+      <div className="center-slot">
+        {children}
+      </div>
+
+      {/* RIGHT JOYSTICK: GIMBAL + SIBLING RST BUTTON */}
+      <div className="joystick-wrapper">
+        <div ref={rightZoneRef} className="j-zone">
+          <div className="j-label">Gimbal</div>
+        </div>
+        
         <button
           type="button"
-          className="reset-btn"
-          onClick={() => onReset?.()}
-          title="Reset camera gimbal to center"
-          aria-label="Reset camera gimbal"
+          className="reset-btn-sibling"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onReset?.();
+          }}
+          style={{
+            borderRadius: "20px",
+          }}
+          // Extra safety to ensure nipplejs doesn't see the start of the touch
+          onPointerDown={(e) => e.stopPropagation()}
         >
           RST
         </button>
-        {children ? <div className="joystick-center-slot">{children}</div> : null}
-      </div>
-
-      <div ref={rightZoneRef} className="j-zone" aria-label="Gimbal joystick (camera look)">
-        <div className="j-label" style={{ color: NEUTRAL_LABEL }}>
-          GIMBAL
-        </div>
       </div>
     </div>
   );

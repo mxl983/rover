@@ -4,7 +4,12 @@ import { RoverSchematic } from "./RoverSchematic";
 export const Meters = ({ stats, compact }) => {
   return (
     <div className="meter-container">
-      <RoverSchematic pan={stats.pan} tilt={stats.tilt} />
+      <RoverSchematic
+        pan={stats.pan}
+        battery={stats.battery}
+        cpuTemp={stats.cpuTemp}
+        latencyMs={stats.latency}
+      />
       {compact ? null : (
         <>
           {" "}

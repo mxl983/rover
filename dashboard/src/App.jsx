@@ -64,21 +64,29 @@ export default function App() {
   };
 
   const handleSystemAction = async (type) => {
+    // 1. Intercept Boot
     if (type === "boot") {
       mqttClientRef.current?.publish("rover/power/pi", "On", { qos: 1 });
       mqttClientRef.current?.publish("rover/power/aux", "On", { qos: 1 });
       setIsPowered(true);
       return;
     }
-
+  
+    // 2. Intercept Capture (New)
+    if (type === "capture") {
+      await handleCapture(); // Divert to your specific capture logic
+      return;
+    }
+  
+    // 3. Handle generic system commands (Reboot/Shutdown)
     if (!window.confirm(`Confirm ${type}?`)) return;
-
+  
     setSystemLoading(true);
     setActionError(null);
     try {
       const endpoint = `${PI_SYSTEM_ENDPOINT}/${type}`;
       await apiPostJson(endpoint, {});
-
+  
       if (type === "shutdown") {
         mqttClientRef.current?.publish("rover/power/pi", "Off 15000", { qos: 1 });
         setIsPowered(false);
@@ -208,16 +216,17 @@ export default function App() {
               {stats?.wifiSignal && <WifiSignal dbm={stats.wifiSignal} />}
             </div>
             <div className="glass-card hud-header-actions">
-              <SystemControls
-                isPowered={isPowered}
-                nvActive={nvActive}
-                resMode={resMode}
-                onNVToggle={handleNVToggle}
-                onResChange={handleResChange}
-                onAction={handleSystemAction}
-                focusMode={focusMode}
-                onFocusChange={handleFocusChange}
-              />
+            <SystemControls
+              isPowered={isPowered}
+              nvActive={nvActive}
+              resMode={resMode}
+              isCapturing={isCapturing}
+              onNVToggle={handleNVToggle}
+              onResChange={handleResChange}
+              onAction={handleSystemAction}
+              focusMode={focusMode}
+              onFocusChange={handleFocusChange}
+            />
               <FullscreenButton />
             </div>
           </div>
@@ -227,6 +236,8 @@ export default function App() {
               <RoverSchematic
                 pan={stats.pan}
                 battery={stats.battery}
+                cpuTemp={stats.cpuTemp}
+                latencyMs={stats.latency}
                 isOffline={!piOnline}
                 handleClick={() => setCompact(false)}
               />
@@ -239,6 +250,8 @@ export default function App() {
                 <RoverSchematic
                   pan={stats.pan}
                   battery={stats.battery}
+                  cpuTemp={stats.cpuTemp}
+                  latencyMs={stats.latency}
                   isOffline={!piOnline}
                   handleClick={() => setCompact(false)}
                 />

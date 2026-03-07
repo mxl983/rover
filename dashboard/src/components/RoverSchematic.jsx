@@ -1,38 +1,84 @@
 import React, { useCallback } from "react";
 import PropTypes from "prop-types";
+import { Battery, BatteryCharging, Thermometer, Activity } from "lucide-react";
 
 const TOUCH_TARGET_MIN = 44;
-const VISUAL_SIZE = 100;
-const CORNER_RADIUS = 12;
+const SIZE = 88;
+const CENTER = SIZE / 2;
+const R_BATTERY = 34;
+const R_CPU = 26;
+const R_LAT = 18;
 
-const colors = {
-  online: {
-    primary: "rgba(0, 122, 255, 0.95)",
-    primaryDim: "rgba(0, 122, 255, 0.4)",
-    coneGradient: ["rgba(0, 122, 255, 0)", "rgba(0, 122, 255, 0.35)"],
-    stroke: "rgba(255, 255, 255, 0.25)",
-    text: "rgba(255, 255, 255, 0.95)",
-  },
-  offline: {
-    primary: "rgba(255, 59, 48, 0.95)",
-    primaryDim: "rgba(255, 59, 48, 0.35)",
-    stroke: "rgba(255, 255, 255, 0.15)",
-    text: "rgba(255, 255, 255, 0.9)",
-  },
+const palette = {
+  green: "#00f2ff",
+  yellow: "#ffd60a",
+  red: "#ff453a",
+  blue: "#0a84ff",
+  grey: "#636366",
+  track: "rgba(255,255,255,0.18)",
+  text: "rgba(255,255,255,0.9)",
 };
+
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+function bandColor(value, { good, warn }, invert = false) {
+  if (value == null) return palette.grey;
+  if (invert) {
+    if (value >= good) return palette.green;
+    if (value >= warn) return palette.yellow;
+    return palette.red;
+  } else {
+    if (value <= good) return palette.green;
+    if (value <= warn) return palette.yellow;
+    return palette.red;
+  }
+}
 
 export const RoverSchematic = ({
   pan = 90,
   battery = null,
+  cpuTemp = null,
+  latencyMs = null,
   isOffline = false,
+  isCharging = false,
   handleClick = () => {},
 }) => {
-  const theme = isOffline ? colors.offline : colors.online;
-  const rotationAngle = pan - 90;
-
   const hasBatteryData = battery !== null && battery !== undefined;
   const chargeLevel = hasBatteryData ? Math.min(Math.max(battery, 0), 100) : 0;
-  const fillHeight = (chargeLevel / 100) * 36;
+
+  const batteryFrac = hasBatteryData ? clamp01(chargeLevel / 100) : 0;
+  const cpuFrac =
+    cpuTemp == null ? 0 : clamp01(Math.min(Math.max(cpuTemp, 0), 100) / 100);
+  const latencyFrac =
+    latencyMs == null ? 0 : clamp01(Math.min(Math.max(latencyMs, 0), 400) / 400);
+
+  const circBattery = 2 * Math.PI * R_BATTERY;
+  const circCpu = 2 * Math.PI * R_CPU;
+  const circLat = 2 * Math.PI * R_LAT;
+
+  const batteryDash = circBattery * batteryFrac;
+  const cpuDash = circCpu * cpuFrac;
+  const latencyDash = circLat * latencyFrac;
+
+  const batteryColor = isOffline
+    ? palette.grey
+    : bandColor(chargeLevel, { good: 60, warn: 30 }, true);
+    
+  const cpuColor = isOffline
+    ? palette.grey
+    : bandColor(cpuTemp, { good: 60, warn: 75 });
+    
+  const latencyColor = isOffline
+    ? palette.grey
+    : bandColor(latencyMs, { good: 80, warn: 200 });
+
+  const labelParts = [];
+  if (hasBatteryData) labelParts.push(`battery ${Math.round(chargeLevel)}%`);
+  if (cpuTemp != null) labelParts.push(`CPU ${Math.round(cpuTemp)}°C`);
+  if (latencyMs != null) labelParts.push(`latency ${Math.round(latencyMs)}ms`);
+  if (pan != null) labelParts.push(`pan ${Math.round(pan)}°`);
+  labelParts.push(isOffline ? "offline" : "online");
+  if (isCharging && !isOffline) labelParts.push("charging");
 
   const onClick = useCallback(
     (e) => {
@@ -42,25 +88,16 @@ export const RoverSchematic = ({
     [handleClick],
   );
 
-  const padding = Math.max(0, (TOUCH_TARGET_MIN - VISUAL_SIZE) / 2);
-  const totalSize = VISUAL_SIZE + padding * 2;
-
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={
-        isOffline
-          ? "Rover offline. Tap to expand metrics."
-          : `Rover status, battery ${hasBatteryData ? Math.round(chargeLevel) : "?"}%. Tap to expand.`
-      }
-      className="rover-schematic-card"
+      aria-label={`${labelParts.join(", ")}. Tap to expand.`}
       style={{
-        width: totalSize,
-        height: totalSize,
+        width: SIZE,
+        height: SIZE,
         minWidth: TOUCH_TARGET_MIN,
         minHeight: TOUCH_TARGET_MIN,
-        padding,
         boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
@@ -80,206 +117,166 @@ export const RoverSchematic = ({
         }
       }}
     >
-      <div
-        className="rover-schematic-inner"
+      <svg
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
         style={{
-          width: VISUAL_SIZE,
-          height: VISUAL_SIZE,
-          borderRadius: CORNER_RADIUS,
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.25)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-          overflow: "hidden",
-          transition: "transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)",
+          width: "100%",
+          height: "100%",
+          overflow: "visible",
+          pointerEvents: "none",
         }}
+        aria-hidden
       >
-        <svg
-          viewBox="0 0 100 100"
-          style={{
-            width: "100%",
-            height: "100%",
-            overflow: "visible",
-            pointerEvents: "none",
-          }}
-          aria-hidden
-        >
-          <defs>
-            <linearGradient
-              id="rover-cone-gradient"
-              x1="0%"
-              y1="100%"
-              x2="0%"
-              y2="0%"
-            >
-              <stop offset="0%" stopColor={theme.primary} stopOpacity="0" />
-              <stop offset="100%" stopColor={theme.primary} stopOpacity="0.4" />
-            </linearGradient>
-            <filter id="rover-soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.2" />
-            </filter>
-          </defs>
+        <defs>
+          <filter
+            id="rover-soft-shadow"
+            x="-20%"
+            y="-20%"
+            width="140%"
+            height="140%"
+          >
+            <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.18" />
+          </filter>
+        </defs>
 
-          <style>{`
-            @media (prefers-reduced-motion: reduce) {
-              .rover-schematic-rotate,
-              .rover-schematic-pulse { animation: none !important; }
-            }
-            .rover-schematic-pulse {
-              animation: rover-pulse 2s ease-in-out infinite;
-            }
-            @keyframes rover-pulse {
-              0%, 100% { opacity: 1; }
-              50% { opacity: 0.45; }
-            }
-          `}</style>
+        <style>{`
+          @media (prefers-reduced-motion: reduce) {
+            .rover-schematic-rotate { animation: none !important; }
+          }
+        `}</style>
 
-          {/* Wheels */}
-          <g opacity={isOffline ? 0.25 : 0.5} filter="url(#rover-soft-shadow)">
-            {[
-              [30, 40],
-              [30, 63],
-              [65, 40],
-              [65, 63],
-            ].map(([x, y], i) => (
-              <rect
-                key={i}
-                x={x}
-                y={y}
-                width={5}
-                height={12}
-                rx={1.5}
-                fill={theme.primary}
-              />
-            ))}
-          </g>
+        {/* Background disc */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_BATTERY + 4}
+          fill="rgba(0,0,0,0.55)"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={1}
+          filter="url(#rover-soft-shadow)"
+        />
 
-          {/* Battery chassis */}
-          <rect
-            x={35}
-            y={40}
-            width={30}
-            height={40}
-            rx={5}
-            fill="rgba(0, 0, 0, 0.35)"
-            stroke={theme.primary}
-            strokeWidth={1.5}
-            opacity={0.9}
-          />
-          <rect
-            x={45}
-            y={36.5}
-            width={10}
-            height={4}
-            rx={1.5}
-            fill={theme.primary}
-          />
+        {/* Ring tracks */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_BATTERY}
+          stroke={palette.track}
+          strokeWidth={3}
+          fill="none"
+        />
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_CPU}
+          stroke={palette.track}
+          strokeWidth={3}
+          fill="none"
+        />
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_LAT}
+          stroke={palette.track}
+          strokeWidth={3}
+          fill="none"
+        />
 
-          {/* Battery fill */}
-          {hasBatteryData && (
-            <g>
-              <path
-                fill={theme.primary}
-                fillOpacity={isOffline ? 0.6 : 0.85}
-                d={`M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 50 ${77.5 - fillHeight - 4} 37.5 ${77.5 - fillHeight} Z`}
-              >
-                {!isOffline && chargeLevel > 0 && (
-                  <animate
-                    attributeName="d"
-                    dur="2.5s"
-                    repeatCount="indefinite"
-                    values={`
-                      M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 40 ${77.5 - fillHeight - 5} 37.5 ${77.5 - fillHeight} Z;
-                      M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 50 ${77.5 - fillHeight - 2} 37.5 ${77.5 - fillHeight} Z;
-                      M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 60 ${77.5 - fillHeight - 5} 37.5 ${77.5 - fillHeight} Z;
-                      M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 50 ${77.5 - fillHeight - 2} 37.5 ${77.5 - fillHeight} Z;
-                      M 37.5 77.5 L 62.5 77.5 L 62.5 ${77.5 - fillHeight} Q 40 ${77.5 - fillHeight - 5} 37.5 ${77.5 - fillHeight} Z;
-                    `}
-                  />
-                )}
-              </path>
-              <text
-                x={50}
-                y={61.5}
-                textAnchor="middle"
-                fill={theme.text}
-                fontSize={10}
-                fontWeight={600}
-                style={{
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
-                  textShadow: "0 1px 2px rgba(0,0,0,0.4)",
-                }}
-              >
-                {Math.round(chargeLevel)}%
-              </text>
-            </g>
-          )}
+        {/* Battery ring */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_BATTERY}
+          stroke={batteryColor}
+          strokeWidth={3}
+          fill="none"
+          strokeDasharray={`${batteryDash} ${circBattery - batteryDash}`}
+          transform={`rotate(-90 ${CENTER} ${CENTER})`}
+          strokeLinecap="round"
+        />
 
-          {/* Camera cone (online) / Offline icon */}
-          {!isOffline ? (
-            <g
-              className="rover-schematic-rotate"
-              transform={`rotate(${-rotationAngle}, 50, 45)`}
-              style={{
-                transition: "transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)",
-              }}
-            >
-              <path
-                d="M50 45 L25 15 L75 15 Z"
-                fill="url(#rover-cone-gradient)"
-                stroke="none"
-              />
+        {/* CPU ring */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_CPU}
+          stroke={cpuColor}
+          strokeWidth={3}
+          fill="none"
+          strokeDasharray={`${cpuDash} ${circCpu - cpuDash}`}
+          transform={`rotate(-90 ${CENTER} ${CENTER})`}
+          strokeLinecap="round"
+        />
+
+        {/* Latency ring */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_LAT}
+          stroke={latencyColor}
+          strokeWidth={3}
+          fill="none"
+          strokeDasharray={`${latencyDash} ${circLat - latencyDash}`}
+          transform={`rotate(-90 ${CENTER} ${CENTER})`}
+          strokeLinecap="round"
+        />
+
+        {/* Pan angle indicator: small tick around outer ring */}
+        {pan != null && !Number.isNaN(pan) && (
+          (() => {
+            const raw = ((pan - 180) * Math.PI) / 180;
+            const panRad = Math.PI - raw;
+            const rInner = R_BATTERY + 2;
+            const rOuter = R_BATTERY + 7;
+            const x1 = CENTER + rInner * Math.cos(panRad);
+            const y1 = CENTER + rInner * Math.sin(panRad);
+            const x2 = CENTER + rOuter * Math.cos(panRad);
+            const y2 = CENTER + rOuter * Math.sin(panRad);
+            const color = isOffline ? palette.grey : palette.green;
+            return (
               <line
-                x1={25}
-                y1={15}
-                x2={75}
-                y2={15}
-                stroke={theme.primary}
-                strokeWidth={1.5}
-                strokeOpacity={0.85}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={color}
+                strokeWidth={2}
+                strokeLinecap="round"
               />
-              <circle
-                cx={50}
-                cy={45}
-                r={3}
-                fill={theme.primary}
-                stroke="rgba(0,0,0,0.25)"
-                strokeWidth={0.8}
-              />
-            </g>
-          ) : (
-            <g
-              className="rover-schematic-pulse"
-              transform="translate(50, 22)"
-              stroke={theme.primary}
-              strokeWidth={1.5}
-              fill="none"
-              strokeLinecap="round"
-            >
-              <path d="M-8 -2 Q 0 -10 8 -2" />
-              <path d="M-5 1 Q 0 -4 5 1" />
-              <circle cx={0} cy={5} r={1.5} fill={theme.primary} stroke="none" />
-              <line x1={-10} y1={8} x2={10} y2={-8} strokeWidth={2} />
-            </g>
-          )}
-        </svg>
-      </div>
+            );
+          })()
+        )}
 
-      <style>{`
-        .rover-schematic-card:focus-visible .rover-schematic-inner {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08),
-            0 0 0 2px rgba(0, 122, 255, 0.5),
-            0 4px 12px rgba(0,0,0,0.25);
-        }
-        .rover-schematic-card:active .rover-schematic-inner {
-          transform: scale(0.96);
-        }
-      `}</style>
+        {/* Metrics Group */}
+        <g 
+          fill={palette.text} 
+          style={{ 
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif" 
+          }}
+        >
+          {/* Battery Row */}
+          {isCharging && !isOffline ? (
+             <BatteryCharging x={CENTER - 11} y={CENTER - 11} size={6} color={palette.green} strokeWidth={2.5} />
+          ) : (
+             <Battery x={CENTER - 11} y={CENTER - 11} size={6} color={palette.text} strokeWidth={2.5} />
+          )}
+          <text x={CENTER - 3} y={CENTER - 6} fontSize={5.5} textAnchor="start">
+            {hasBatteryData ? `${Math.round(chargeLevel)}%` : isOffline ? "--" : "…"}
+          </text>
+
+          {/* CPU Row */}
+          <Thermometer x={CENTER - 11} y={CENTER - 3} size={6} color={palette.text} strokeWidth={2.5} />
+          <text x={CENTER - 3} y={CENTER + 2} fontSize={5.5} textAnchor="start">
+            {cpuTemp != null ? `${Math.round(cpuTemp)}°` : isOffline ? "--" : "…"}
+          </text>
+
+          {/* Latency Row */}
+          <Activity x={CENTER - 11} y={CENTER + 5} size={6} color={palette.text} strokeWidth={2.5} />
+          <text x={CENTER - 3} y={CENTER + 10} fontSize={5.5} textAnchor="start">
+            {latencyMs != null ? `${Math.round(latencyMs)}ms` : isOffline ? "--" : "…"}
+          </text>
+        </g>
+      </svg>
     </div>
   );
 };
@@ -287,6 +284,9 @@ export const RoverSchematic = ({
 RoverSchematic.propTypes = {
   pan: PropTypes.number,
   battery: PropTypes.number,
+  cpuTemp: PropTypes.number,
+  latencyMs: PropTypes.number,
   isOffline: PropTypes.bool,
+  isCharging: PropTypes.bool,
   handleClick: PropTypes.func,
 };
