@@ -17,8 +17,11 @@ import mqtt from "mqtt";
 import { SystemControls } from "./components/SystemControls";
 import { WifiSignal } from "./components/WifiSignal";
 import { DriveAssistHUD } from "./components/DriveAssistHUD";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { RoverSchematic } from "./components/RoverSchematic";
+import { FullscreenButton } from "./components/FullscreenButton";
+import { DualJoystickControls } from "./components/JoystickControlCluster";
+import { useIsMobile } from "./hooks/useIsMobile";
 
 export default function App() {
   const socketRef = useRef(null);
@@ -33,6 +36,7 @@ export default function App() {
   const [resMode, setResMode] = useState("720p");
   const [focusMode, setFocusMode] = useState("far");
   const [compact, setCompact] = useState(true);
+  const isMobile = useIsMobile();
 
   let lastPingTime = useRef(0);
   let lastHeartBeat = useRef(0);
@@ -325,8 +329,8 @@ export default function App() {
               className="glass-card"
               style={{
                 display: "flex",
-                flexDirection: "column",
-                gap: "10px",
+                flexDirection: "row",
+                gap: "20px",
                 border: "none",
                 padding: "0px",
               }}
@@ -341,6 +345,7 @@ export default function App() {
                 focusMode={focusMode}
                 onFocusChange={handleFocusChange}
               />
+              <FullscreenButton></FullscreenButton>
             </div>
           </div>
 
@@ -396,19 +401,28 @@ export default function App() {
             >
               {piOnline ? (
                 <>
-                  <ControlCluster
-                    onDockingToggle={toggleDocking}
-                    onDrive={handleDriveUpdate}
-                    usbPower={stats.usbPower}
-                    onLightToggle={() => {
-                      const nextState = stats.usbPower === "on" ? "off" : "on";
-                      toggleLight(nextState);
-                    }}
-                    isDockingMode={stats.isDockingMode}
-                    onCapture={handleCapture}
-                    isCapturing={isCapturing}
-                    onReset={handleCameraReset}
-                  />
+                  {!isMobile && (
+                    <ControlCluster
+                      onDockingToggle={toggleDocking}
+                      onDrive={handleDriveUpdate}
+                      usbPower={stats.usbPower}
+                      onLightToggle={() => {
+                        const nextState =
+                          stats.usbPower === "on" ? "off" : "on";
+                        toggleLight(nextState);
+                      }}
+                      isDockingMode={stats.isDockingMode}
+                      onCapture={handleCapture}
+                      isCapturing={isCapturing}
+                      onReset={handleCameraReset}
+                    />
+                  )}
+                  {isMobile && (
+                    <DualJoystickControls
+                      onDrive={handleDriveUpdate}
+                      onReset={handleCameraReset}
+                    />
+                  )}
                 </>
               ) : null}
             </div>

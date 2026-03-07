@@ -27,10 +27,12 @@ class RoverDriver:
             
             self.active_keys = []
             self.last_time = time.time()
-            self.glide_speed = 45.0
+            self.glide_speed = 45.0 # Degrees per second
             
-            # --- THE MISSING ATTRIBUTE ---
+            # --- Timing & Reporting ---
             self.reset_timer = 0 
+            self.last_report_time = 0
+            self.report_interval = 0.1 # 10Hz reporting back to dashboard
 
             # Boot Centering
             self.apply_servo_positions()
@@ -42,31 +44,49 @@ class RoverDriver:
             sys.stderr.flush()
 
     def apply_servo_positions(self):
+        """Applies the calculated angles to the physical hardware."""
         final_pan = self.pan_angle + (self.pan_center_point - 90.0)
         final_tilt = self.tilt_angle + (self.tilt_center_point - 90.0)
+        
+        # Hardware Safety Bounds
         final_pan = max(0, min(180, final_pan))
         final_tilt = max(0, min(180, final_tilt))
+        
         self.kit.servo[self.pan_channel].angle = final_pan
         self.kit.servo[self.tilt_channel].angle = final_tilt
 
     def relax_servos(self):
+        """Cuts PWM signal to prevent jitter and save power."""
         self.kit.servo[self.pan_channel].angle = None
         self.kit.servo[self.tilt_channel].angle = None
 
     def reset_servos(self):
+        """Smoothly returns camera to 90/90 center."""
         self.pan_angle = 90.0
         self.tilt_angle = 90.0
         self.apply_servo_positions()
-        # Keep power on for 1.2s so it actually reaches 90/90
+        # Keep power on for 1.2s to ensure it reaches center
         self.reset_timer = time.time() + 1.2 
-        print(json.dumps({"type": "servo_update", "pan": 90.0, "tilt": 90.0}), flush=True)
+        self.report_angle(force=True)
+
+    def report_angle(self, force=False):
+        """Sends current angles to stdout for Node.js/Dashboard."""
+        now = time.time()
+        if force or (now - self.last_report_time > self.report_interval):
+            print(json.dumps({
+                "type": "servo_update", 
+                "pan": round(self.pan_angle, 2), 
+                "tilt": round(self.tilt_angle, 2)
+            }), flush=True)
+            self.last_report_time = now
 
     def update_servos(self):
+        """Main loop logic for movement and power management."""
         now = time.time()
         dt = now - self.last_time
         self.last_time = now
 
-        # 1. Check if we are moving via keys
+        # 1. Check for Arrow Key Movement
         is_moving_keys = any(k.startswith('Arrow') for k in self.active_keys)
 
         if is_moving_keys:
@@ -77,44 +97,57 @@ class RoverDriver:
             if 'ArrowDown' in self.active_keys: self.tilt_angle = min(180, self.tilt_angle + step)
             
             self.apply_servo_positions()
-            self.reset_timer = 0 # Cancel any active reset window if manual move starts
-            print(json.dumps({
-                "type": "servo_update", 
-                "pan": round(self.pan_angle, 2), 
-                "tilt": round(self.tilt_angle, 2)
-            }), flush=True)
+            # Set a short 500ms window to hold position after key release
+            self.reset_timer = time.time() + 0.5 
+            
+            # Send real-time updates while moving
+            self.report_angle()
 
         else:
-            # 2. Not moving via keys. Are we in the middle of a reset?
+            # 2. Not moving. Are we within a power window (resetting or just stopped)?
             if time.time() < self.reset_timer:
                 self.apply_servo_positions()
             else:
                 self.relax_servos()
 
     def handle_input(self, data):
+        """Processes incoming commands from Node.js stdin."""
         if isinstance(data, dict) and data.get("command") == "reset_servos":
             self.reset_servos()
         elif isinstance(data, list):
             self.active_keys = data
-            # Apply motor logic for W, A, S, D
+            
+            # --- Motor Logic (W, A, S, D) ---
             v, h = 0, 0
             if 'w' in data: v += self.base_speed
             if 's' in data: v -= self.base_speed
             if 'a' in data: h -= (self.base_speed * self.turn_factor)
             if 'd' in data: h += (self.base_speed * self.turn_factor)
+            
+            # Tank Turn Logic
             if v == 0 and h != 0:
                 h = (self.base_speed * self.tank_turn_factor) if h > 0 else -(self.base_speed * self.tank_turn_factor)
-            IIC.control_speed(int(v + h), int(v + h), int(v - h), int(v - h)) if (v != 0 or h != 0) else IIC.control_pwm(0,0,0,0)
+            
+            if (v != 0 or h != 0):
+                IIC.control_speed(int(v + h), int(v + h), int(v - h), int(v - h))
+            else:
+                IIC.control_pwm(0,0,0,0)
 
 if __name__ == "__main__":
+    # Signal to Node.js that the child process is alive
     print(json.dumps({"status": "ready"}), flush=True)
     rover = RoverDriver()
+    
     while True:
+        # Check for input without blocking the loop (0.02s timeout)
         rlist, _, _ = select.select([sys.stdin], [], [], 0.02)
         if rlist:
             line = sys.stdin.readline()
             if line:
                 try:
                     rover.handle_input(json.loads(line))
-                except: pass
+                except:
+                    pass
+        
+        # Always run servo update (allows for glide and power-off timing)
         rover.update_servos()

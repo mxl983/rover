@@ -127,11 +127,16 @@ export const ControlCluster = ({
           -webkit-tap-highlight-color: transparent;
           -webkit-touch-callout: none;
           touch-action: none; 
+          -webkit-tap-highlight-color: rgba(0,0,0,0); 
+          -webkit-touch-callout: none; 
+          -webkit-user-select: none; 
+          user-select: none;
+          touch-action: none;
         }
         .active { background: #00f2ff !important; color: #000 !important; }
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .dock-on { background: #00ff41 !important; color: #000; border-color: #00ff41; }
-        .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; }
+        .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
 
       {Array.from({ length: 16 }).map((_, i) => {

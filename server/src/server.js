@@ -33,7 +33,7 @@ const STARTUP_TIME = Date.now();
 const GRACE_PERIOD_MS = 2 * 60 * 1000;
 
 // Time it takes until system entering power saving mode
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 50 * 60 * 1000;
 
 // Set allowed origin
 const corsOptions = {

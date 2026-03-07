@@ -19,6 +19,9 @@ paths:
   mic:
     source: publisher
 
+  talk:
+    source: publisher
+
 # WebRTC Server settings
 webrtc: yes
 webrtcAddress: :8889

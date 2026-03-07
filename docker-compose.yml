@@ -1,6 +1,7 @@
 services:
   mediamtx:
     image: bluenviron/mediamtx:latest-rpi
+    # image: bluenviron/mediamtx:latest-ffmpeg
     container_name: mediamtx
     network_mode: "host"
     privileged: true
@@ -68,7 +69,6 @@ services:
     restart: always
     env_file:
       - .env
-
 networks:
   rover-net:
     driver: bridge

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Power,
   RefreshCw,
@@ -6,7 +7,10 @@ import {
   Sun,
   Settings,
   Focus,
-  ChevronRight,
+  ChevronLeft,
+  Camera,
+  Cpu,
+  Check,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -18,159 +22,189 @@ export const SystemControls = ({
   onResChange,
   onFocusChange,
   onAction,
-  onExpandChange, // New prop to notify parent
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  // Notify parent when expansion state changes
-  useEffect(() => {
-    onExpandChange?.(isExpanded);
-  }, [isExpanded, onExpandChange]);
-
   if (!isPowered)
     return (
       <button onClick={() => onAction("boot")} style={styles.bootBtn}>
-        BOOT
+        BOOT SYSTEM
       </button>
     );
 
-  // --- COLLAPSED STATE (Bare Icon) ---
-  if (!isExpanded) {
-    return (
-      <div style={styles.expandedWrapper}>
-        <div style={styles.controlWrapper}>
-          <Settings
-            size={16}
-            style={styles.bareIcon}
-            onClick={() => setIsExpanded(true)}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // --- EXPANDED STATE ---
   return (
-    <div style={styles.expandedWrapper}>
-      <div style={styles.controlWrapper}>
-        <Focus size={10} style={styles.iconOverlay} />
-        <select
-          value={focusMode}
-          onChange={(e) => onFocusChange(e.target.value)}
-          style={styles.dropdown}
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <div style={styles.triggerWrapper}>
+          <Settings size={18} style={styles.bareIcon} />
+        </div>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          style={styles.menuContent}
+          side="bottom"
+          align="end" // Aligns menu to the left side of the trigger
+          sideOffset={8}
         >
-          <option value="auto">AF-C</option>
-          <option value="near">NEAR</option>
-          <option value="normal">MID</option>
-          <option value="far">FAR</option>
-        </select>
-      </div>
+          {/* VISION SUBMENU */}
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger style={styles.menuItem}>
+              <Camera size={14} /> <span>Vision</span>
+              <ChevronLeft
+                size={12}
+                style={{ marginLeft: "auto", opacity: 0.5 }}
+              />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent
+                style={styles.menuContent}
+                sideOffset={2}
+                alignOffset={-5}
+              >
+                <DropdownMenu.Label style={styles.menuLabel}>
+                  Resolution
+                </DropdownMenu.Label>
+                {["240p", "480p", "720p", "1080p"].map((res) => (
+                  <DropdownMenu.CheckboxItem
+                    key={res}
+                    style={styles.menuItem}
+                    checked={resMode === res}
+                    onCheckedChange={() => onResChange(res)}
+                  >
+                    {res.toUpperCase()}
+                    <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
+                      <Check size={12} color="#00f2ff" />
+                    </DropdownMenu.ItemIndicator>
+                  </DropdownMenu.CheckboxItem>
+                ))}
+                <DropdownMenu.Separator style={styles.separator} />
+                <DropdownMenu.Item
+                  style={styles.menuItem}
+                  onSelect={() => onNVToggle(!nvActive)}
+                >
+                  {nvActive ? <Moon size={12} /> : <Sun size={12} />}
+                  NV Mode: {nvActive ? "ON" : "OFF"}
+                </DropdownMenu.Item>
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
 
-      <div style={styles.controlWrapper}>
-        <Settings size={10} style={styles.iconOverlay} />
-        <select
-          value={resMode}
-          onChange={(e) => onResChange(e.target.value)}
-          style={styles.dropdown}
-        >
-          <option value="240p">240P</option>
-          <option value="480p">480P</option>
-          <option value="720p">720P</option>
-          <option value="1080p">1080P</option>
-        </select>
-      </div>
+          {/* FOCUS SUBMENU */}
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger style={styles.menuItem}>
+              <Focus size={14} /> <span>Focus</span>
+              <ChevronLeft
+                size={12}
+                style={{ marginLeft: "auto", opacity: 0.5 }}
+              />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent
+                style={styles.menuContent}
+                sideOffset={2}
+              >
+                {[
+                  { label: "Auto Focus", value: "auto" },
+                  { label: "Near", value: "near" },
+                  { label: "Mid", value: "normal" },
+                  { label: "Far", value: "far" },
+                ].map((f) => (
+                  <DropdownMenu.CheckboxItem
+                    key={f.value}
+                    style={styles.menuItem}
+                    checked={focusMode === f.value}
+                    onCheckedChange={() => onFocusChange(f.value)}
+                  >
+                    {f.label}
+                    <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
+                      <Check size={12} color="#00f2ff" />
+                    </DropdownMenu.ItemIndicator>
+                  </DropdownMenu.CheckboxItem>
+                ))}
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
 
-      <button
-        onClick={() => onNVToggle(!nvActive)}
-        style={{ ...styles.baseBtn, color: nvActive ? "#b099ff" : "#888" }}
-      >
-        {nvActive ? <Moon size={12} /> : <Sun size={12} />}
-        <span style={{ fontSize: "9px" }}>NV</span>
-      </button>
+          <DropdownMenu.Separator style={styles.separator} />
 
-      <button onClick={() => onAction("reboot")} style={styles.baseBtn}>
-        <RefreshCw size={12} />
-      </button>
-      <button onClick={() => onAction("shutdown")} style={styles.powerBtn}>
-        <Power size={12} />
-      </button>
+          {/* SYSTEM ACTIONS */}
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onAction("reboot")}
+          >
+            <RefreshCw size={14} /> <span>Reboot Rover</span>
+          </DropdownMenu.Item>
 
-      <ChevronRight
-        size={18}
-        style={styles.bareIcon}
-        onClick={() => setIsExpanded(false)}
-      />
-    </div>
+          <DropdownMenu.Item
+            style={{ ...styles.menuItem, color: "#ff4444" }}
+            onSelect={() => onAction("shutdown")}
+          >
+            <Power size={14} /> <span>Shutdown</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 };
 
 const styles = {
+  triggerWrapper: {
+    outline: "none",
+    display: "inline-block",
+  },
   bareIcon: {
     color: "#00f2ff",
     cursor: "pointer",
-    opacity: 0.7,
+    opacity: 0.8,
     transition: "opacity 0.2s",
     padding: "4px",
   },
-  expandedWrapper: {
-    display: "flex",
-    gap: "6px",
-    alignItems: "center",
-    background: "rgba(0,0,0,0.6)",
-    padding: "4px 8px",
-    borderRadius: "4px",
+  menuContent: {
+    minWidth: "160px",
+    backgroundColor: "rgba(10, 10, 10, 0.95)",
+    backdropFilter: "blur(12px)",
+    borderRadius: "6px",
+    padding: "5px",
     border: "1px solid rgba(0, 242, 255, 0.2)",
-    animation: "appear 0.2s ease-out",
+    boxShadow: "0px 10px 38px -10px rgba(0, 0, 0, 0.5)",
+    zIndex: 9999,
   },
-  controlWrapper: {
-    position: "relative",
+  menuItem: {
+    fontSize: "12px",
+    color: "#eee",
+    borderRadius: "3px",
     display: "flex",
     alignItems: "center",
-  },
-  iconOverlay: {
-    position: "absolute",
-    left: "6px",
-    color: "#00f2ff",
-    pointerEvents: "none",
-  },
-  baseBtn: {
-    height: "22px",
-    padding: "0 8px",
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    backgroundColor: "#1a1a1a",
-    color: "#00f2ff",
-    border: "1px solid #00f2ffaa",
-    borderRadius: "2px",
+    gap: "10px",
+    padding: "8px 10px",
     cursor: "pointer",
+    outline: "none",
+    transition: "background 0.2s",
+    // Radix uses data attributes for highlighting
+    "&:focus": {
+      backgroundColor: "rgba(0, 242, 255, 0.1)",
+      color: "#00f2ff",
+    },
   },
-  powerBtn: {
-    height: "22px",
-    padding: "0 8px",
-    backgroundColor: "#b70101",
-    color: "#fff",
-    border: "1px solid #ff4444",
-    borderRadius: "2px",
-    cursor: "pointer",
-  },
-  dropdown: {
-    height: "22px",
-    backgroundColor: "#1a1a1a",
-    color: "#00f2ff",
-    border: "1px solid #00f2ffaa",
-    borderRadius: "2px",
+  menuLabel: {
+    paddingLeft: "10px",
     fontSize: "10px",
-    padding: "0 4px 0 20px",
-    appearance: "none",
-    cursor: "pointer",
+    lineHeight: "25px",
+    color: "#666",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+  },
+  separator: {
+    height: "1px",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    margin: "5px",
   },
   bootBtn: {
-    height: "22px",
-    backgroundColor: "#00f2ff",
+    background: "#00f2ff",
+    color: "#000",
     border: "none",
-    padding: "0 12px",
-    borderRadius: "2px",
+    padding: "8px 16px",
+    borderRadius: "4px",
+    fontSize: "11px",
     fontWeight: "bold",
     cursor: "pointer",
   },
