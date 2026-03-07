@@ -1,18 +1,16 @@
 import mqtt from "mqtt";
-import "dotenv/config";
+import config from "../config.js";
 
 const mqttOptions = {
-  port: 8883,
-  host: "84f09906a62e42c78c5d9b0555aa71f1.s1.eu.hivemq.cloud",
-  protocol: "mqtts",
+  port: config.mqtt.port,
+  host: config.mqtt.host,
+  protocol: config.mqtt.protocol,
   username: process.env.MQTT_USER,
   password: process.env.MQTT_PASS,
   keepalive: 60,
   reconnectPeriod: 1000,
-  rejectUnauthorized: false,
+  rejectUnauthorized: config.mqtt.rejectUnauthorized,
 };
-
-console.log(mqttOptions);
 
 class MqttService {
   constructor() {

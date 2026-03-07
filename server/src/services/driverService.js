@@ -9,7 +9,7 @@ const SCRIPT_PATH = path.join(__dirname, "../../");
 
 const options = {
   mode: "text",
-  pythonPath: "/usr/bin/python3",
+  pythonPath: process.env.PYTHON_PATH || "/usr/bin/python3",
   pythonOptions: ["-u"],
   scriptPath: SCRIPT_PATH,
 };
@@ -148,7 +148,7 @@ class DriverService {
 
   stopVisionSystem() {
     if (this.visionShell) {
-      this.visionShell.send(sJSON.stringify({ command: "stop_vision" }));
+      this.visionShell.send(JSON.stringify({ command: "stop_vision" }));
     }
   }
 
@@ -161,7 +161,7 @@ class DriverService {
     } else {
       if (this.visionShell) {
         console.log("🛑 Stopping Docking Mode...");
-        this.visionShell.send({ command: "stop_vision" });
+        this.visionShell.send(JSON.stringify({ command: "stop_vision" }));
         this.visionShell.end();
         this.visionShell = null;
         this.currentData.docking = { status: "off" }; // Clear dashboard data

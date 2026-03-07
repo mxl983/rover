@@ -1,21 +1,18 @@
 import express from "express";
 import https from "https";
+import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import config from "./config.js";
 import { mqttService } from "./services/mqttService.js";
 import { driverService } from "./services/driverService.js";
 import { stateService } from "./services/stateService.js";
 import cameraRoutes from "./routes/camera.js";
 import systemRoutes from "./routes/system.js";
 import controlRoutes from "./routes/control.js";
-
-const sslOptions = {
-  key: fs.readFileSync("/cert.key"),
-  cert: fs.readFileSync("/cert.crt"),
-};
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -37,14 +34,33 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 // Set allowed origin
 const corsOptions = {
-  origin: ["http://localhost:5173", "https://mxl983.github.io"],
+  origin: config.cors.origins,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
   credentials: true,
 };
 
 const app = express();
-const server = https.createServer(sslOptions, app);
+let sslOptions;
+
+if (config.ssl.enabled) {
+  try {
+    sslOptions = {
+      key: fs.readFileSync(config.ssl.keyPath),
+      cert: fs.readFileSync(config.ssl.certPath),
+    };
+  } catch (err) {
+    console.error(
+      "Failed to load SSL certificates, falling back to HTTP:",
+      err.message,
+    );
+  }
+}
+
+const server =
+  config.ssl.enabled && sslOptions
+    ? https.createServer(sslOptions, app)
+    : http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 app.use(express.json());
@@ -54,6 +70,24 @@ app.use("/api/system", systemRoutes);
 app.use("/api/control", controlRoutes);
 app.use("/photos", express.static(path.join(__dirname, "..", "photos")));
 app.options(/(.*)/, cors(corsOptions));
+
+app.get("/healthz", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    env: config.env,
+  });
+});
+
+app.use((req, res, next) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 // System status update cycle
 setInterval(() => {
@@ -115,8 +149,11 @@ wss.on("connection", (ws) => {
   ws.on("close", () => console.log("Client disconnected"));
 });
 
-server.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on https://100.x.x.x:3000");
+const { port, host } = config.server;
+const protocol = config.ssl.enabled && sslOptions ? "https" : "http";
+
+server.listen(port, host, () => {
+  console.log(`Server running on ${protocol}://${host}:${port}`);
 });
 
 async function handleIdleShutdown() {
@@ -126,7 +163,7 @@ async function handleIdleShutdown() {
   try {
     mqttService.triggerIdleShutdown({
       lastPing: stateService.lastPingTimestamp,
-      uptime: stateService.startupTime,
+      uptime: Date.now() - stateService.startupTime,
       battery: stateService.currentBatteryPct,
     });
 
@@ -141,6 +178,6 @@ async function handleIdleShutdown() {
     }, 3000);
   } catch (err) {
     console.error("Shutdown sequence failed:", err);
-    isShuttingDown = false;
+    stateService.isShuttingDown = false;
   }
 }

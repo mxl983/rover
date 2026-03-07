@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import nipplejs from "nipplejs";
 
-const ZONE_SIZE_PX = 160;
-const RESET_BTN_SIZE = 42; 
+const ZONE_SIZE_PX = 100;
+const RESET_BTN_SIZE = 20; 
 const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
 const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
@@ -111,7 +111,7 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
           height: 220px;
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: self-end;
           padding: 0 5vw 20px 5vw;
           box-sizing: border-box;
           pointer-events: none;
