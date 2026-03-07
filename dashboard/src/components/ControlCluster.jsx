@@ -23,7 +23,7 @@ export const ControlCluster = ({
   onReset,
   usbPower,
   isDockingMode,
-  isCapturing,
+  isCapturing: _isCapturing,
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
   const prevKeysRef = useRef("");

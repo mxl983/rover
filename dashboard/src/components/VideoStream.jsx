@@ -5,7 +5,7 @@ import {
   AUDIO_TALK_HOST,
 } from "../constants";
 
-export const VideoStream = ({ dockingData }) => {
+export const VideoStream = ({ dockingData: _dockingData }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const pcRef = useRef(null);
@@ -85,7 +85,7 @@ export const VideoStream = ({ dockingData }) => {
       } else {
         throw new Error("Video SDP exchange failed");
       }
-    } catch (err) {
+    } catch {
       retryTimeoutRef.current.video = setTimeout(startVideoWebRTC, 3000);
     }
   }, []);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import mqtt from "mqtt";
+import PropTypes from "prop-types";
 import { MQTT_HOST } from "../constants";
 
 export const LoginOverlay = ({ onLoginSuccess }) => {
@@ -194,4 +195,8 @@ const styles = {
     border: "1px solid #ff444433",
     padding: "5px",
   },
+};
+
+LoginOverlay.propTypes = {
+  onLoginSuccess: PropTypes.func.isRequired,
 };

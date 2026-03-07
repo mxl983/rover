@@ -350,3 +350,71 @@ button:active {
 .stat {
   padding: 3px;
 }
+
+/* Production: error banner, header layout, footer layout */
+.action-error-banner {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+  max-width: 90vw;
+}
+.action-error-banner .hud-dismiss {
+  padding: 4px 10px;
+  min-width: auto;
+  font-size: 18px;
+  line-height: 1;
+}
+.hud-header-brand {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 5px;
+  border: none;
+}
+.hud-header-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  border: none;
+  padding: 0;
+}
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--spacex-cyan);
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logout-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+}
+.footer-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.footer-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+.drive-control-monitor {
+  flex-direction: row;
+  align-items: center;
+  padding-right: 0;
+}

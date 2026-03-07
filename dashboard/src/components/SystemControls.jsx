@@ -9,7 +9,6 @@ import {
   Focus,
   ChevronLeft,
   Camera,
-  Cpu,
   Check,
 } from "lucide-react";
 
