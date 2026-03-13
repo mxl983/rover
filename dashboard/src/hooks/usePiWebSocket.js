@@ -41,7 +41,8 @@ export function usePiWebSocket() {
 
       socket.onclose = () => {
         setIsOnline(false);
-        reconnectTimeout = setTimeout(connect, 3000);
+        // Aggressive reconnect so controls become available quickly once Pi is up.
+        reconnectTimeout = setTimeout(connect, 1000);
       };
 
       socket.onerror = () => socket.close();

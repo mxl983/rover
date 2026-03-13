@@ -29,39 +29,19 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
     client.on("connect", () => {
       console.log("🔓 AUTH_VALIDATED");
 
-      // Define strictly
+      // As soon as MQTT auth succeeds, transition UI and let the main app manage MQTT.
+      onLoginSuccess(client, formData);
+
+      // Fire-and-forget boot signals; don't block UI on confirmations.
       const topic1 = "rover/power/pi";
       const topic2 = "rover/power/aux";
       const payload = "On";
-      const options = { qos: 1 };
+      const pubOptions = { qos: 1 };
+      client.publish(topic1, payload, pubOptions);
+      client.publish(topic2, payload, pubOptions);
 
-      // Use a counter to ensure both are finished before closing
-      let completed = 0;
-      const finish = () => {
-        completed++;
-        if (completed === 2) {
-          console.log("🚀 Both signals confirmed by Broker. Transitioning...");
-          setTimeout(() => {
-            client.end();
-            onLoginSuccess(client, formData);
-          }, 200);
-        }
-      };
-
-      // Explicitly publish with callback to confirm QoS 1 success
-      client.publish(topic1, payload, options, (err) => {
-        if (!err) {
-          console.log(`✅ ${topic1} confirmed at QoS 1`);
-          finish();
-        }
-      });
-
-      client.publish(topic2, payload, options, (err) => {
-        if (!err) {
-          console.log(`✅ ${topic2} confirmed at QoS 1`);
-          finish();
-        }
-      });
+      // Close this temporary client shortly after; App will create its own via useMqtt.
+      setTimeout(() => client.end(), 500);
     });
 
     client.on("error", (err) => {

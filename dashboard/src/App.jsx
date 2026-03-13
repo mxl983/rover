@@ -199,124 +199,186 @@ export default function App() {
 
   return (
     <div className="viewport">
-      {actionError && (
-        <div className="glass-card action-error-banner" role="alert">
-          <span>{actionError}</span>
-          <button
-            type="button"
-            className="hud-dismiss"
-            onClick={clearError}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+      <ActionErrorBanner message={actionError} onDismiss={clearError} />
+
+      {!isAuthenticated && (
+        <LoginOverlay onLoginSuccess={handleLoginSuccess} />
       )}
 
-      {!isAuthenticated && <LoginOverlay onLoginSuccess={handleLoginSuccess} />}
       <VideoStream dockingData={stats.docking} />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
       {isAuthenticated && (
         <div className="hud-overlay">
-          <div className="hud-header">
-            <div className="glass-card hud-header-brand">
-              <div>Mango Rover V1.0</div>
-              {stats?.wifiSignal && <WifiSignal dbm={stats.wifiSignal} />}
-            </div>
-            <div className="glass-card hud-header-actions">
-              <SystemControls
-                isPowered={isPowered}
-                nvActive={nvActive}
-                resMode={resMode}
-                isCapturing={isCapturing}
-                onNVToggle={handleNVToggle}
-                onResChange={handleResChange}
-                onAction={handleSystemAction}
-                focusMode={focusMode}
-                onFocusChange={handleFocusChange}
-              />
-              <FullscreenButton />
-            </div>
-          </div>
+          <HudHeader
+            wifiSignal={stats?.wifiSignal}
+            isPowered={isPowered}
+            nvActive={nvActive}
+            resMode={resMode}
+            isCapturing={isCapturing}
+            focusMode={focusMode}
+            onNVToggle={handleNVToggle}
+            onResChange={handleResChange}
+            onAction={handleSystemAction}
+            onFocusChange={handleFocusChange}
+          />
 
-          <div className="hud-footer">
-            {compact && !isMobile && (
-              <RoverSchematic
-                pan={stats.pan}
-                battery={stats.battery}
-                cpuTemp={stats.cpuTemp}
-                latencyMs={stats.latency}
-                isOffline={!piOnline}
-                handleClick={() => setCompact(false)}
-              />
-            )}
-            {compact && isMobile && (
-              <DualJoystickControls
-                onDrive={handleDriveUpdate}
-                onReset={handleCameraReset}
-              >
-                <RoverSchematic
-                  pan={stats.pan}
-                  battery={stats.battery}
-                  cpuTemp={stats.cpuTemp}
-                  latencyMs={stats.latency}
-                  isOffline={!piOnline}
-                  handleClick={() => setCompact(false)}
-                />
-              </DualJoystickControls>
-            )}
-            {!compact && (
-              <div className="drive-control-monitor glass-card">
-                <div className="footer-metrics">
-                  <SubsystemItem
-                    label="PI_SERVER"
-                    dotColor={piOnline ? "green" : "red"}
-                  />
-                  <SubsystemItem
-                    label="ESP32"
-                    dotColor={isEspOnline ? "green" : "red"}
-                  />
-                  <Meters stats={stats} compact={compact} />
-                </div>
-                <ChevronLeft
-                  onClick={() => setCompact(true)}
-                  aria-label="Collapse"
-                />
-              </div>
-            )}
-
-            <div className="footer-controls">
-              {piOnline ? (
-                <>
-                  {!isMobile && (
-                    <ControlCluster
-                      onDockingToggle={toggleDocking}
-                      onDrive={handleDriveUpdate}
-                      usbPower={stats.usbPower}
-                      onLightToggle={() => {
-                        const nextState =
-                          stats.usbPower === "on" ? "off" : "on";
-                        toggleLight(nextState);
-                      }}
-                      isDockingMode={stats.isDockingMode}
-                      onCapture={handleCapture}
-                      isCapturing={isCapturing}
-                      onReset={handleCameraReset}
-                    />
-                  )}
-                  {isMobile && !compact && (
-                    <DualJoystickControls
-                      onDrive={handleDriveUpdate}
-                      onReset={handleCameraReset}
-                    />
-                  )}
-                </>
-              ) : null}
-            </div>
-          </div>
+          <HudFooter
+            compact={compact}
+            isMobile={isMobile}
+            stats={stats}
+            piOnline={piOnline}
+            isEspOnline={isEspOnline}
+            onToggleCompact={setCompact}
+            onDrive={handleDriveUpdate}
+            onResetCamera={handleCameraReset}
+            onToggleLight={toggleLight}
+            onCapture={handleCapture}
+            isCapturing={isCapturing}
+            onDockingToggle={toggleDocking}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+function ActionErrorBanner({ message, onDismiss }) {
+  if (!message) return null;
+  return (
+    <div className="glass-card action-error-banner" role="alert">
+      <span>{message}</span>
+      <button
+        type="button"
+        className="hud-dismiss"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function HudHeader({
+  wifiSignal,
+  isPowered,
+  nvActive,
+  resMode,
+  isCapturing,
+  focusMode,
+  onNVToggle,
+  onResChange,
+  onAction,
+  onFocusChange,
+}) {
+  return (
+    <div className="hud-header">
+      <div className="glass-card hud-header-brand">
+        <div>Mango Rover V1.0</div>
+        {wifiSignal && <WifiSignal dbm={wifiSignal} />}
+      </div>
+      <div className="glass-card hud-header-actions">
+        <SystemControls
+          isPowered={isPowered}
+          nvActive={nvActive}
+          resMode={resMode}
+          isCapturing={isCapturing}
+          onNVToggle={onNVToggle}
+          onResChange={onResChange}
+          onAction={onAction}
+          focusMode={focusMode}
+          onFocusChange={onFocusChange}
+        />
+        <FullscreenButton />
+      </div>
+    </div>
+  );
+}
+
+function HudFooter({
+  compact,
+  isMobile,
+  stats,
+  piOnline,
+  isEspOnline,
+  onToggleCompact,
+  onDrive,
+  onResetCamera,
+  onToggleLight,
+  onCapture,
+  isCapturing,
+  onDockingToggle,
+}) {
+  const schematic = (
+    <RoverSchematic
+      pan={stats.pan}
+      battery={stats.battery}
+      cpuTemp={stats.cpuTemp}
+      latencyMs={stats.latency}
+      isOffline={!piOnline}
+      handleClick={() => onToggleCompact(false)}
+    />
+  );
+
+  return (
+    <div className="hud-footer">
+      {compact && !isMobile && schematic}
+
+      {compact && isMobile && (
+        <DualJoystickControls onDrive={onDrive} onReset={onResetCamera}>
+          {schematic}
+        </DualJoystickControls>
+      )}
+
+      {!compact && (
+        <div className="drive-control-monitor glass-card">
+          <div className="footer-metrics">
+            <SubsystemItem
+              label="PI_SERVER"
+              dotColor={piOnline ? "green" : "red"}
+            />
+            <SubsystemItem
+              label="ESP32"
+              dotColor={isEspOnline ? "green" : "red"}
+            />
+            <Meters stats={stats} compact={compact} />
+          </div>
+          <ChevronLeft
+            onClick={() => onToggleCompact(true)}
+            aria-label="Collapse"
+          />
+        </div>
+      )}
+
+      <div className="footer-controls">
+        {piOnline ? (
+          <>
+            {!isMobile && (
+              <ControlCluster
+                onDockingToggle={onDockingToggle}
+                onDrive={onDrive}
+                usbPower={stats.usbPower}
+                onLightToggle={() => {
+                  const nextState =
+                    stats.usbPower === "on" ? "off" : "on";
+                  onToggleLight(nextState);
+                }}
+                isDockingMode={stats.isDockingMode}
+                onCapture={onCapture}
+                isCapturing={isCapturing}
+                onReset={onResetCamera}
+              />
+            )}
+            {isMobile && !compact && (
+              <DualJoystickControls
+                onDrive={onDrive}
+                onReset={onResetCamera}
+              />
+            )}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

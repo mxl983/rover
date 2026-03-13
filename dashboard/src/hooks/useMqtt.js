@@ -24,6 +24,12 @@ export function useMqtt(sessionCreds) {
 
     mqttClientRef.current = client;
 
+    // On reconnect or fresh connect, make sure the rover is awake.
+    client.on("connect", () => {
+      client.publish("rover/power/pi", "On", { qos: 1 });
+      client.publish("rover/power/aux", "On", { qos: 1 });
+    });
+
     client.subscribe(HEARTBEAT_TOPIC, (err) => {
       if (err) return;
     });

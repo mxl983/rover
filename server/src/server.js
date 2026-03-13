@@ -21,6 +21,7 @@ import {
   closeTelemetry,
 } from "./services/telemetryService.js";
 import { success, error } from "./utils/apiResponse.js";
+import { logger } from "./utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,9 +68,9 @@ if (config.ssl.enabled) {
       cert: fs.readFileSync(config.ssl.certPath),
     };
   } catch (err) {
-    console.error(
-      "Failed to load SSL certificates, falling back to HTTP:",
-      err.message,
+    logger.error(
+      { err },
+      "Failed to load SSL certificates, falling back to HTTP",
     );
   }
 }
@@ -104,8 +105,12 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  error(res, config.env === "production" ? "Internal server error" : err.message, 500);
+  logger.error({ err, path: req.path }, "Unhandled error");
+  error(
+    res,
+    config.env === "production" ? "Internal server error" : err.message,
+    500,
+  );
 });
 
 // playSystemAudio('system_online.mp3');
@@ -162,7 +167,7 @@ setInterval(() => {
 }, 1000);
 
 wss.on("connection", (ws) => {
-  console.log("New browser client connected");
+  logger.info("New browser client connected");
 
   ws.on("message", (message) => {
     try {
@@ -172,25 +177,28 @@ wss.on("connection", (ws) => {
         stateService.lastPingTimestamp = Date.now();
         ws.send(JSON.stringify({ type: "PONG" }));
       }
-    } catch (err) {
-      console.error("Invalid JSON received:", message.toString());
-    }
+      } catch (err) {
+        logger.warn(
+          { err, raw: message.toString() },
+          "Invalid JSON received from WebSocket client",
+        );
+      }
   });
 
-  ws.on("close", () => console.log("Client disconnected"));
+  ws.on("close", () => logger.info("Client disconnected"));
 });
 
 const { port, host } = config.server;
 const protocol = config.ssl.enabled && sslOptions ? "https" : "http";
 
 server.listen(port, host, () => {
-  console.log(`Server running on ${protocol}://${host}:${port}`);
+  logger.info({ host, port, protocol }, "Server listening");
   speak("System online");
 });
 
 async function handleIdleShutdown() {
   stateService.isShuttingDown = true;
-  console.log("🚨 SYSTEM IDLE: Initiating shutdown...");
+  logger.warn("SYSTEM IDLE: Initiating shutdown...");
 
   try {
     // Final telemetry snapshot right before auto-shutdown
@@ -216,7 +224,7 @@ async function handleIdleShutdown() {
       process.exit(0);
     }, 3000);
   } catch (err) {
-    console.error("Shutdown sequence failed:", err);
+    logger.error({ err }, "Shutdown sequence failed");
     stateService.isShuttingDown = false;
   }
 }

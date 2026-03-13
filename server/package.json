@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "NODE_ENV=test NODE_TLS_REJECT_UNAUTHORIZED=0 vitest run",
+    "test:watch": "NODE_ENV=test NODE_TLS_REJECT_UNAUTHORIZED=0 vitest",
     "start": "node src/server.js",
     "start:prod": "NODE_ENV=production node src/server.js"
   },
@@ -20,8 +21,14 @@
     "express": "^5.2.1",
     "http-proxy-middleware": "^3.0.5",
     "mqtt": "^5.15.0",
+    "pino": "^9.5.0",
     "play-sound": "^1.1.6",
     "python-shell": "^5.0.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.0",
+    "vitest": "^2.0.5"
   }
 }
