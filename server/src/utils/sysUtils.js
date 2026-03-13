@@ -1,5 +1,31 @@
 import fs from "fs";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
+import playerPkg from "play-sound";
+import path from "path";
+
+/**
+ * Speak text on the Pi speaker using espeak-ng (TTS). No-op if espeak-ng is not available.
+ * Requires: (1) docker-compose mounts /dev/snd, (2) Pi audio set to correct output (3.5mm or HDMI).
+ * @param {string} text - Text to speak (e.g. "System online")
+ * @param {object} options - Optional: { speed: 150, lang: 'en' }
+ */
+export function speak(text, options = {}) {
+  const speed = options.speed ?? 150;
+  const lang = options.lang ?? "en";
+  const child = spawn("espeak-ng", ["-s", String(speed), "-v", lang, text], {
+    stdio: "ignore",
+  });
+  child.on("error", (err) => {
+    console.warn("TTS (espeak-ng) unavailable:", err.message);
+  });
+  child.on("close", (code) => {
+    if (code && code !== 0) {
+      console.warn("TTS (espeak-ng) exited with code", code);
+    }
+  });
+}
+
+const player = playerPkg({ player: "mpg123" });
 
 let startTime = Date.now();
 
@@ -79,3 +105,19 @@ export const computePoseOffset = (
 
   return { x, y, r };
 };
+
+/**
+ * Plays an audio file from the container's mounted audio directory.
+ * @param {string} filename - The name of the file (e.g., 'system_online.mp3')
+ */
+export function playSystemAudio(filename) {
+  const filePath = path.join("/app/audios", filename);
+
+  player.play(filePath, (err) => {
+    if (err) {
+      console.error(`Playback error: ${err.message}`);
+    } else {
+      console.log(`Finished playing: ${filename}`);
+    }
+  });
+}

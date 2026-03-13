@@ -1,28 +1,29 @@
 FROM balenalib/raspberrypi3-node:18-bookworm-run
 
-# Install the correct Bookworm packages
-# 1. Add python3-pip and OpenCV system dependencies
+# System packages: Python, I2C, camera, TTS. No vision/OpenCV/numpy.
 RUN install_packages \
     python3 \
     python3-pip \
     python3-dev \
     python3-smbus \
-    python3-opencv \
-    python3-numpy \
     i2c-tools \
     libcamera-apps-lite \
-    docker.io \
-    uhubctl \ 
+    espeak-ng \
+    uhubctl \
     wireless-tools \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
     build-essential
 
-# Pip will handle adafruit-pureio automatically as a dependency
+# Pip will handle adafruit-pureio automatically as a dependency.
+# Install adafruit-blinka first so board_imports.json and Pi detection are present.
 RUN pip3 install --no-cache-dir --break-system-packages \
+    adafruit-blinka \
     adafruit-circuitpython-servokit \
     adafruit-circuitpython-pca9685 \
     rpi-lgpio
+
+# Ensure board_imports.json exists next to board.py (some installs omit package data)
+COPY server/driver/ensure_board_imports.py /tmp/ensure_board_imports.py
+RUN python3 /tmp/ensure_board_imports.py
 
 WORKDIR /app
 
@@ -31,7 +32,7 @@ RUN npm install
 
 COPY server/ .
 
-# Ensure photos directory is ready
-RUN mkdir -p /app/photos && chmod 777 /app/photos
+# Ensure photos and telemetry data directories
+RUN mkdir -p /app/photos /app/data && chmod 777 /app/photos /app/data
 
 CMD ["npm", "start"]

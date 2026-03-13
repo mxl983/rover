@@ -3,56 +3,42 @@ import fs from "fs";
 import { exec } from "child_process";
 import util from "util";
 import { stateService } from "../services/stateService.js";
+import { success, error, badRequest, asyncHandler } from "../utils/apiResponse.js";
 
 const router = express.Router();
 const execPromise = util.promisify(exec);
 
-router.post("/shutdown", (req, res) => {
-  // Create the "trigger" file in the shared volume
-  const triggerPath = "/app/shared/shutdown.req";
-  fs.writeFileSync(
-    triggerPath,
-    "shutdown requested at " + new Date().toISOString(),
-  );
+router.post(
+  "/shutdown",
+  asyncHandler((req, res) => {
+    fs.writeFileSync("/app/shared/shutdown.req", "shutdown requested at " + new Date().toISOString());
+    success(res, { message: "Host shutdown signal sent to Pi." });
+  }),
+);
 
-  res.json({ message: "Host shutdown signal sent to Pi." });
-});
-
-router.post("/reboot", (req, res) => {
-  try {
-    // Create the "reboot" trigger file in the shared volume
+router.post(
+  "/reboot",
+  asyncHandler((req, res) => {
     fs.writeFileSync("/app/shared/reboot.req", "rebooting");
-    res.json({ message: "Host reboot sequence initiated." });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to write signal file" });
-  }
-});
+    success(res, { message: "Host reboot sequence initiated." });
+  }),
+);
 
-router.post("/usb-power", async (req, res) => {
-  const { action } = req.body; // Expecting "on" or "off"
-
-  // Mapping action to uhubctl state (1 = on, 0 = off)
-  const state = action === "on" ? "1" : "0";
-
-  try {
-    // Targeting hub 1-1 which we verified controls your lights/audio
-    console.log(`Setting USB Power to: ${action}`);
+router.post(
+  "/usb-power",
+  asyncHandler(async (req, res) => {
+    const { action } = req.body ?? {};
+    if (action !== "on" && action !== "off") {
+      return badRequest(res, "action must be 'on' or 'off'");
+    }
+    const state = action === "on" ? "1" : "0";
     await execPromise(`sudo uhubctl -l 1-1 -a ${state}`);
-
     stateService.usbPowerState = action === "on";
-
-    res.json({
-      status: "success",
+    success(res, {
       usbPower: action,
-      warning:
-        action === "off" ? "USB Audio disconnected" : "USB Audio re-enabled",
+      warning: action === "off" ? "USB Audio disconnected" : "USB Audio re-enabled",
     });
-  } catch (error) {
-    console.error("USB Power Error:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to toggle USB power. Is uhubctl installed?" });
-  }
-});
+  }),
+);
 
 export default router;

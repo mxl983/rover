@@ -51,9 +51,16 @@ export const SystemControls = ({
             onSelect={() => !isCapturing && onAction("capture")}
             disabled={isCapturing}
           >
-            <Aperture size={14} style={isCapturing ? { animation: "spin 2s linear infinite" } : {}} />
+            <Aperture
+              size={14}
+              style={
+                isCapturing ? { animation: "spin 2s linear infinite" } : {}
+              }
+            />
             <span>{isCapturing ? "Capturing..." : "Take Hi-Res Photo"}</span>
-            <span style={{ marginLeft: "auto", fontSize: "9px", opacity: 0.5 }}>C</span>
+            <span style={{ marginLeft: "auto", fontSize: "9px", opacity: 0.5 }}>
+              C
+            </span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />
@@ -62,11 +69,20 @@ export const SystemControls = ({
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger style={styles.menuItem}>
               <Camera size={14} /> <span>Vision</span>
-              <ChevronLeft size={12} style={{ marginLeft: "auto", opacity: 0.5 }} />
+              <ChevronLeft
+                size={12}
+                style={{ marginLeft: "auto", opacity: 0.5 }}
+              />
             </DropdownMenu.SubTrigger>
             <DropdownMenu.Portal>
-              <DropdownMenu.SubContent style={styles.menuContent} sideOffset={2} alignOffset={-5}>
-                <DropdownMenu.Label style={styles.menuLabel}>Resolution</DropdownMenu.Label>
+              <DropdownMenu.SubContent
+                style={styles.menuContent}
+                sideOffset={2}
+                alignOffset={-5}
+              >
+                <DropdownMenu.Label style={styles.menuLabel}>
+                  Resolution
+                </DropdownMenu.Label>
                 {["240p", "480p", "720p", "1080p"].map((res) => (
                   <DropdownMenu.CheckboxItem
                     key={res}
@@ -81,7 +97,10 @@ export const SystemControls = ({
                   </DropdownMenu.CheckboxItem>
                 ))}
                 <DropdownMenu.Separator style={styles.separator} />
-                <DropdownMenu.Item style={styles.menuItem} onSelect={() => onNVToggle(!nvActive)}>
+                <DropdownMenu.Item
+                  style={styles.menuItem}
+                  onSelect={() => onNVToggle(!nvActive)}
+                >
                   {nvActive ? <Moon size={12} /> : <Sun size={12} />}
                   NV Mode: {nvActive ? "ON" : "OFF"}
                 </DropdownMenu.Item>
@@ -93,10 +112,16 @@ export const SystemControls = ({
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger style={styles.menuItem}>
               <Focus size={14} /> <span>Focus</span>
-              <ChevronLeft size={12} style={{ marginLeft: "auto", opacity: 0.5 }} />
+              <ChevronLeft
+                size={12}
+                style={{ marginLeft: "auto", opacity: 0.5 }}
+              />
             </DropdownMenu.SubTrigger>
             <DropdownMenu.Portal>
-              <DropdownMenu.SubContent style={styles.menuContent} sideOffset={2}>
+              <DropdownMenu.SubContent
+                style={styles.menuContent}
+                sideOffset={2}
+              >
                 {[
                   { label: "Auto Focus", value: "auto" },
                   { label: "Near", value: "near" },
@@ -122,7 +147,10 @@ export const SystemControls = ({
           <DropdownMenu.Separator style={styles.separator} />
 
           {/* SYSTEM ACTIONS */}
-          <DropdownMenu.Item style={styles.menuItem} onSelect={() => onAction("reboot")}>
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onAction("reboot")}
+          >
             <RefreshCw size={14} /> <span>Reboot Rover</span>
           </DropdownMenu.Item>
 
@@ -141,7 +169,7 @@ export const SystemControls = ({
 const styles = {
   triggerWrapper: {
     outline: "none",
-    display: "inline-block",
+    display: "flex",
   },
   bareIcon: {
     color: "#00f2ff",

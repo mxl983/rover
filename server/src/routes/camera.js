@@ -2,53 +2,40 @@ import express from "express";
 import { exec } from "child_process";
 import util from "util";
 import axios from "axios";
-import path from "path";
+import { success, error, badRequest, asyncHandler } from "../utils/apiResponse.js";
 
 const router = express.Router();
 const execPromise = util.promisify(exec);
 const MEDIAMTX_API = "http://127.0.0.1:9997/v3/config/paths/patch/cam";
 
-router.post("/capture", async (req, res) => {
-  const fileName = `capture_${Date.now()}.jpg`;
-  const filePath = `/app/photos/${fileName}`;
+router.post(
+  "/capture",
+  asyncHandler(async (req, res) => {
+    const fileName = `capture_${Date.now()}.jpg`;
+    const filePath = `/app/photos/${fileName}`;
+    try {
+      await execPromise("DOCKER_API_VERSION=1.44 docker stop mediamtx");
+      await execPromise(
+        `rpicam-still -n -o "${filePath}" --width 4056 --height 3040 --immediate --flush`,
+      );
+      const photoUrl = `${req.protocol}://${req.get("host")}/photos/${fileName}`;
+      success(res, { url: photoUrl, filename: fileName });
+    } finally {
+      exec("DOCKER_API_VERSION=1.44 docker start mediamtx", (err) => {
+        if (err) console.error("Failed to restart MediaMTX:", err);
+      });
+    }
+  }),
+);
 
-  try {
-    console.log("📸 Blinking: Stopping video stream...");
-    // 1. Pause the MediaMTX container
-    await execPromise("DOCKER_API_VERSION=1.44 docker stop mediamtx");
-
-    console.log("🔭 Taking 4K High-Res Photo...");
-    // 2. Capture the high-res photo
-    // -n: no preview, --immediate: don't wait for focus/exposure circles
-    await execPromise(
-      `rpicam-still -n -o "${filePath}" --width 4056 --height 3040 --immediate --flush`,
-    );
-
-    console.log("✅ Photo saved. Restarting stream...");
-
-    const photoUrl = `${req.protocol}://${req.get("host")}/photos/${fileName}`;
-
-    res.json({
-      status: "success",
-      url: photoUrl,
-      filename: fileName,
-    });
-  } catch (error) {
-    console.error("Capture Error:", error);
-    res.status(500).json({ error: error.message });
-  } finally {
-    // 3. Always restart the stream, even if the photo fails
-    exec("DOCKER_API_VERSION=1.44 docker start mediamtx", (err) => {
-      if (err) console.error("Failed to restart MediaMTX:", err);
-      else console.log("▶️ Stream resumed.");
-    });
-  }
-});
-
-router.post("/nightvision", async (req, res) => {
-  const { active } = req.body;
-
-  const config = active
+router.post(
+  "/nightvision",
+  asyncHandler(async (req, res) => {
+    const { active } = req.body ?? {};
+    if (typeof active !== "boolean") {
+      return badRequest(res, "active must be true or false");
+    }
+    const config = active
     ? {
         rpiCameraFPS: 30,
         rpiCameraShutter: 66000,
@@ -69,20 +56,16 @@ router.post("/nightvision", async (req, res) => {
         rpiCameraSaturation: 1.0,
       };
 
-  try {
     await axios.patch(MEDIAMTX_API, config);
+    success(res, { message: `Night Vision ${active ? "Enabled" : "Disabled"}` });
+  }),
+);
 
-    res.json({ message: `Night Vision ${active ? "Enabled" : "Disabled"}` });
-  } catch (err) {
-    console.error("MediaMTX API Error:", err.message);
-    res.status(500).json({ error: "Failed to update camera settings" });
-  }
-});
-
-router.post("/focus", async (req, res) => {
-  const { mode } = req.body;
-
-  let settings = {};
+router.post(
+  "/focus",
+  asyncHandler(async (req, res) => {
+    const { mode } = req.body ?? {};
+    let settings = {};
 
   if (mode === "auto") {
     settings = {
@@ -97,18 +80,16 @@ router.post("/focus", async (req, res) => {
     };
   }
 
-  try {
     await axios.patch(MEDIAMTX_API, settings);
-    res.json({ message: `Focus set to ${mode}` });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to apply focus" });
-  }
-});
+    success(res, { message: `Focus set to ${mode}` });
+  }),
+);
 
-router.post("/resolution", async (req, res) => {
-  const { mode } = req.body;
-
-  const resMap = {
+router.post(
+  "/resolution",
+  asyncHandler(async (req, res) => {
+    const { mode } = req.body ?? {};
+    const resMap = {
     "240p": { width: 320, height: 240, fps: 60 },
     "480p": { width: 640, height: 480, fps: 60 },
     "720p": { width: 1280, height: 720, fps: 60 },
@@ -124,23 +105,21 @@ router.post("/resolution", async (req, res) => {
     rpiCameraFPS: target.fps,
   };
 
-  try {
     await axios.patch(MEDIAMTX_API, settings);
-    res.json({ message: `Resolution changed to ${mode}` });
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
+    success(res, { message: `Resolution changed to ${mode}` });
+  }),
+);
 
-router.post("/settings", async (req, res) => {
-  const { settings } = req.body;
-
-  try {
+router.post(
+  "/settings",
+  asyncHandler(async (req, res) => {
+    const { settings } = req.body ?? {};
+    if (!settings || typeof settings !== "object") {
+      return badRequest(res, "settings object required");
+    }
     await axios.patch(MEDIAMTX_API, settings);
-    res.json({ message: "Settings applied" });
-  } catch (err) {
-    res.status(500).send("API Error");
-  }
-});
+    success(res, { message: "Settings applied" });
+  }),
+);
 
 export default router;

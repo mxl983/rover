@@ -49,6 +49,11 @@ const config = {
       false,
     ),
   },
+  telemetry: {
+    enabled: parseBoolean(process.env.TELEMETRY_ENABLED, true),
+    dbPath: process.env.TELEMETRY_DB_PATH || "/app/data/telemetry.db",
+    retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 7),
+  },
 };
 
 export default config;

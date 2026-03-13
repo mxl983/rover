@@ -1,33 +1,34 @@
 import express from "express";
 import { driverService } from "../services/driverService.js";
 import { stateService } from "../services/stateService.js";
+import { success, badRequest, asyncHandler } from "../utils/apiResponse.js";
 
 const router = express.Router();
 
-router.post("/drive", (req, res) => {
-  // Pass the entire body to the driver service
-  driverService.sendMoveCommand(req.body);
-  res.sendStatus(200);
-});
+function isValidDrivePayload(body) {
+  if (Array.isArray(body)) return true;
+  if (body && typeof body === "object") {
+    if ("drive" in body && body.drive != null && typeof body.drive !== "object") return false;
+    if ("gimbal" in body && body.gimbal != null && typeof body.gimbal !== "object") return false;
+    return true;
+  }
+  return false;
+}
+
+router.post(
+  "/drive",
+  asyncHandler((req, res) => {
+    if (!isValidDrivePayload(req.body)) {
+      return badRequest(res, "Body must be an array of keys or { drive?, gimbal? }");
+    }
+    driverService.sendMoveCommand(req.body);
+    success(res, { accepted: true });
+  }),
+);
 
 router.post("/docking", (req, res) => {
-  const { enabled } = req.body;
-
-  if (typeof enabled !== "boolean") {
-    return res.status(400).json({ error: "Enabled must be true or false" });
-  }
-
-  stateService.isDockingMode = !!enabled;
-
-  try {
-    driverService.toggleDockingMode(enabled);
-    res.json({
-      status: "success",
-      dockingMode: enabled ? "active" : "inactive",
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to toggle docking mode" });
-  }
+  stateService.isDockingMode = false;
+  success(res, { dockingMode: "inactive" });
 });
 
 export default router;

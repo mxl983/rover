@@ -13,18 +13,35 @@ import { stateService } from "./services/stateService.js";
 import cameraRoutes from "./routes/camera.js";
 import systemRoutes from "./routes/system.js";
 import controlRoutes from "./routes/control.js";
+import { speak } from "./utils/sysUtils.js";
+import {
+  initTelemetry,
+  recordTelemetry,
+  getTelemetry,
+  closeTelemetry,
+} from "./services/telemetryService.js";
+import { success, error } from "./utils/apiResponse.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Connect to pub-sub service
 mqttService.connect();
 
-// Start python child process
 driverService.start();
+initTelemetry();
+
+function onShutdown() {
+  closeTelemetry();
+  process.exit(0);
+}
+process.on("SIGTERM", onShutdown);
+process.on("SIGINT", onShutdown);
 
 //
 let LAST_CHECK_TIME = Date.now();
 const STARTUP_TIME = Date.now();
+let LAST_TELEMETRY_WRITE = 0;
 
 // Clock sync grace period
 const GRACE_PERIOD_MS = 2 * 60 * 1000;
@@ -72,22 +89,26 @@ app.use("/photos", express.static(path.join(__dirname, "..", "photos")));
 app.options(/(.*)/, cors(corsOptions));
 
 app.get("/healthz", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: process.uptime(),
-    env: config.env,
-  });
+  success(res, { status: "ok", uptime: process.uptime(), env: config.env });
+});
+
+app.get("/api/telemetry", (req, res) => {
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 100), 1000);
+  const since = req.query.since || null;
+  const data = getTelemetry({ limit, since });
+  success(res, { telemetry: data });
 });
 
 app.use((req, res, next) => {
-  res.status(404).json({ error: "Not found" });
+  res.status(404).json({ success: false, error: "Not found" });
 });
 
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
+  error(res, config.env === "production" ? "Internal server error" : err.message, 500);
 });
+
+// playSystemAudio('system_online.mp3');
 
 // System status update cycle
 setInterval(() => {
@@ -113,10 +134,20 @@ setInterval(() => {
 
   driverService.sync();
 
+  const health = stateService.getHealth() ?? {};
+  if (
+    Object.keys(health).length &&
+    timeSinceStartup > 10_000 && // wait 10s after server online
+    now - LAST_TELEMETRY_WRITE >= 60_000 // then once per minute
+  ) {
+    recordTelemetry(health);
+    LAST_TELEMETRY_WRITE = now;
+  }
+
   const payload = {
     type: "HEALTH_UPDATE",
     data: {
-      ...stateService.getHealth(),
+      ...health,
       timestamp: new Date().toLocaleTimeString(),
       ttl: IDLE_TIMEOUT_MS - timeSinceLastPing,
     },
@@ -154,6 +185,7 @@ const protocol = config.ssl.enabled && sslOptions ? "https" : "http";
 
 server.listen(port, host, () => {
   console.log(`Server running on ${protocol}://${host}:${port}`);
+  speak("System online");
 });
 
 async function handleIdleShutdown() {
@@ -161,6 +193,12 @@ async function handleIdleShutdown() {
   console.log("🚨 SYSTEM IDLE: Initiating shutdown...");
 
   try {
+    // Final telemetry snapshot right before auto-shutdown
+    const health = stateService.getHealth();
+    if (health && Object.keys(health).length) {
+      recordTelemetry(health);
+    }
+
     mqttService.triggerIdleShutdown({
       lastPing: stateService.lastPingTimestamp,
       uptime: Date.now() - stateService.startupTime,
@@ -174,6 +212,7 @@ async function handleIdleShutdown() {
     );
 
     setTimeout(() => {
+      closeTelemetry();
       process.exit(0);
     }, 3000);
   } catch (err) {

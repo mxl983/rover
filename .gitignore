@@ -1,6 +1,35 @@
-# Node
-dashboard/node_modules/
-photos
-rover.tail9d0237.ts.net.crt
-rover.tail9d0237.ts.net.key
+############################################################
+# Root .gitignore for Mango Rover
+# Ignore dependencies, build artefacts, secrets, and runtime data
+############################################################
+
+# Node dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artefacts
+dist/
+build/
+dashboard/dist/
+
+# Local env / secrets / credentials
 .env
+.env.*
+*.crt
+*.key
+
+# Telemetry and other runtime data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+photos/

@@ -29,7 +29,9 @@ import { isAllowedCaptureUrl } from "./api/capture";
 export default function App() {
   const { isAuthenticated, sessionCreds, login, logout } = useRoverSession();
   const { stats, isOnline: piOnline } = usePiWebSocket();
-  const { isEspOnline, mqttClientRef } = useMqtt(isAuthenticated ? sessionCreds : null);
+  const { isEspOnline, mqttClientRef } = useMqtt(
+    isAuthenticated ? sessionCreds : null,
+  );
 
   const [isPowered, setIsPowered] = useState(true);
   const [nvActive, setNvActive] = useState(false);
@@ -71,24 +73,26 @@ export default function App() {
       setIsPowered(true);
       return;
     }
-  
+
     // 2. Intercept Capture (New)
     if (type === "capture") {
       await handleCapture(); // Divert to your specific capture logic
       return;
     }
-  
+
     // 3. Handle generic system commands (Reboot/Shutdown)
     if (!window.confirm(`Confirm ${type}?`)) return;
-  
+
     setSystemLoading(true);
     setActionError(null);
     try {
       const endpoint = `${PI_SYSTEM_ENDPOINT}/${type}`;
       await apiPostJson(endpoint, {});
-  
+
       if (type === "shutdown") {
-        mqttClientRef.current?.publish("rover/power/pi", "Off 15000", { qos: 1 });
+        mqttClientRef.current?.publish("rover/power/pi", "Off 15000", {
+          qos: 1,
+        });
         setIsPowered(false);
       }
     } catch (err) {
@@ -198,7 +202,12 @@ export default function App() {
       {actionError && (
         <div className="glass-card action-error-banner" role="alert">
           <span>{actionError}</span>
-          <button type="button" className="hud-dismiss" onClick={clearError} aria-label="Dismiss">
+          <button
+            type="button"
+            className="hud-dismiss"
+            onClick={clearError}
+            aria-label="Dismiss"
+          >
             ×
           </button>
         </div>
@@ -216,17 +225,17 @@ export default function App() {
               {stats?.wifiSignal && <WifiSignal dbm={stats.wifiSignal} />}
             </div>
             <div className="glass-card hud-header-actions">
-            <SystemControls
-              isPowered={isPowered}
-              nvActive={nvActive}
-              resMode={resMode}
-              isCapturing={isCapturing}
-              onNVToggle={handleNVToggle}
-              onResChange={handleResChange}
-              onAction={handleSystemAction}
-              focusMode={focusMode}
-              onFocusChange={handleFocusChange}
-            />
+              <SystemControls
+                isPowered={isPowered}
+                nvActive={nvActive}
+                resMode={resMode}
+                isCapturing={isCapturing}
+                onNVToggle={handleNVToggle}
+                onResChange={handleResChange}
+                onAction={handleSystemAction}
+                focusMode={focusMode}
+                onFocusChange={handleFocusChange}
+              />
               <FullscreenButton />
             </div>
           </div>
@@ -260,11 +269,20 @@ export default function App() {
             {!compact && (
               <div className="drive-control-monitor glass-card">
                 <div className="footer-metrics">
-                  <SubsystemItem label="PI_SERVER" dotColor={piOnline ? "green" : "red"} />
-                  <SubsystemItem label="ESP32" dotColor={isEspOnline ? "green" : "red"} />
+                  <SubsystemItem
+                    label="PI_SERVER"
+                    dotColor={piOnline ? "green" : "red"}
+                  />
+                  <SubsystemItem
+                    label="ESP32"
+                    dotColor={isEspOnline ? "green" : "red"}
+                  />
                   <Meters stats={stats} compact={compact} />
                 </div>
-                <ChevronLeft onClick={() => setCompact(true)} aria-label="Collapse" />
+                <ChevronLeft
+                  onClick={() => setCompact(true)}
+                  aria-label="Collapse"
+                />
               </div>
             )}
 
@@ -277,7 +295,8 @@ export default function App() {
                       onDrive={handleDriveUpdate}
                       usbPower={stats.usbPower}
                       onLightToggle={() => {
-                        const nextState = stats.usbPower === "on" ? "off" : "on";
+                        const nextState =
+                          stats.usbPower === "on" ? "off" : "on";
                         toggleLight(nextState);
                       }}
                       isDockingMode={stats.isDockingMode}

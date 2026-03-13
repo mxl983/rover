@@ -14,12 +14,23 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
   const managersRef = useRef({ drive: null, look: null });
 
   const onDriveRef = useRef(onDrive);
-  const activeKeys = useRef({ drive: "", look: "" });
+  const analogState = useRef({
+    drive: { x: 0, y: 0 },
+    gimbal: { x: 0, y: 0 },
+  });
 
-  // Keep the drive callback up to date without re-triggering the effect
   useEffect(() => {
     onDriveRef.current = onDrive;
   }, [onDrive]);
+
+  const sendAnalog = () => {
+    if (onDriveRef.current) {
+      onDriveRef.current({
+        drive: { ...analogState.current.drive },
+        gimbal: { ...analogState.current.gimbal },
+      });
+    }
+  };
 
   useEffect(() => {
     const leftEl = leftZoneRef.current;
@@ -30,7 +41,7 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
       mode: "static",
       position: { left: "50%", top: "50%" },
       size: 110,
-      threshold: 0.1,
+      threshold: 0.05,
       catchDistance: 150,
     };
 
@@ -49,48 +60,33 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
     managersRef.current.drive = driveManager;
     managersRef.current.look = lookManager;
 
-    const syncState = () => {
-      const keysToSend = [];
-      if (activeKeys.current.drive) keysToSend.push(activeKeys.current.drive);
-      if (activeKeys.current.look) keysToSend.push(activeKeys.current.look);
-      if (onDriveRef.current) {
-        onDriveRef.current(keysToSend);
+    const toAnalog = (data) => {
+      const force = typeof data.force === "number" ? data.force : (data.distance ? Math.min(1, data.distance / 50) : 1);
+      if (data.vector && typeof data.vector.x === "number" && typeof data.vector.y === "number") {
+        return { x: data.vector.x * force, y: -data.vector.y * force };
       }
+      const rad = data.angle?.radian ?? 0;
+      return { x: Math.cos(rad) * force, y: -Math.sin(rad) * force };
     };
 
-    // Drive Listeners
     driveManager.on("move", (evt, data) => {
-      if (!data.direction) return;
-      const map = { up: "w", down: "s", left: "a", right: "d" };
-      const key = map[data.direction.angle];
-      if (activeKeys.current.drive !== key) {
-        activeKeys.current.drive = key;
-        syncState();
-      }
+      analogState.current.drive = toAnalog(data);
+      sendAnalog();
     });
 
     driveManager.on("end", () => {
-      activeKeys.current.drive = "";
-      syncState();
+      analogState.current.drive = { x: 0, y: 0 };
+      sendAnalog();
     });
 
-    // Look (Gimbal) Listeners
     lookManager.on("move", (evt, data) => {
-      if (!data.direction) return;
-      const map = {
-        up: "ArrowUp", down: "ArrowDown",
-        left: "ArrowLeft", right: "ArrowRight",
-      };
-      const key = map[data.direction.angle];
-      if (activeKeys.current.look !== key) {
-        activeKeys.current.look = key;
-        syncState();
-      }
+      analogState.current.gimbal = toAnalog(data);
+      sendAnalog();
     });
 
     lookManager.on("end", () => {
-      activeKeys.current.look = "";
-      syncState();
+      analogState.current.gimbal = { x: 0, y: 0 };
+      sendAnalog();
     });
 
     return () => {

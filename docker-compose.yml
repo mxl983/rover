@@ -50,6 +50,9 @@ services:
       - ./rover.tail9d0237.ts.net.crt:/cert.crt
       - ./rover.tail9d0237.ts.net.key:/cert.key
       - /tmp:/app/shared
+      - ./server/audios:/app/audios
+      # Telemetry DB on host so it persists across power cycles
+      - ./data:/app/data
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq
@@ -58,6 +61,8 @@ services:
       - "/dev/v4l-subdev0:/dev/v4l-subdev0"
       - "/dev/v4l-subdev1:/dev/v4l-subdev1"
       - /dev/media0:/dev/media0
+      # Sound (for TTS / espeak-ng). If no sound, on Pi run: raspi-config → Audio → force 3.5mm or HDMI
+      - /dev/snd:/dev/snd
     ports:
       - "3000:3000"
     command: npm start
@@ -69,6 +74,9 @@ services:
     restart: always
     env_file:
       - .env
+    environment:
+      BLINKA_FORCEBOARD: "RASPBERRY_PI_3B"
+      BLINKA_FORCECHIP: "BCM2XXX"
 networks:
   rover-net:
     driver: bridge

@@ -12,14 +12,18 @@ const options = {
   pythonPath: process.env.PYTHON_PATH || "/usr/bin/python3",
   pythonOptions: ["-u"],
   scriptPath: SCRIPT_PATH,
+  env: {
+    ...process.env,
+    BLINKA_FORCEBOARD: process.env.BLINKA_FORCEBOARD || "RASPBERRY_PI_3B",
+    BLINKA_FORCECHIP: process.env.BLINKA_FORCECHIP || "BCM2XXX",
+  },
 };
 
 class DriverService {
   constructor() {
     this.motorShell = null;
     this.telemetryShell = null;
-    this.visionShell = null;
-    this.currentData = { voltage: 0, distance: 0, docking: {} };
+    this.currentData = { voltage: 0, distance: 0 };
   }
 
   start() {
@@ -76,6 +80,13 @@ class DriverService {
     this.motorShell.on("error", (err) => {
       console.error("❌ Motor CRASH:", err);
     });
+
+    this.motorShell.on("close", (code, signal) => {
+      this.motorShell = null;
+      if (code !== 0 && code !== null) {
+        console.warn("🐍 Motor process exited (code=%s). Drive commands will no-op until restart.", code);
+      }
+    });
   }
 
   initTelemetry() {
@@ -97,33 +108,6 @@ class DriverService {
     });
   }
 
-  initVision() {
-    const visionOptions = { ...options, pythonOptions: ["-u"] };
-    this.visionShell = new PythonShell(
-      "vision/VisionManager.py",
-      visionOptions,
-    );
-
-    this.visionShell.on("message", (data) => {
-      const result = JSON.parse(data);
-      if (result.type === "docking") {
-        stateService.docking = result.result;
-        // if (this.currentData.docking.status === "found") {
-        //   const offset = computePoseOffset(this.currentData.docking.data.pose);
-        //   this.autoDocker.processOffset(offset);
-        // }
-      }
-    });
-
-    this.visionShell.on("error", (err) =>
-      console.error("👁️ Vision Error:", err),
-    );
-
-    this.visionShell.on("stderr", (err) => {
-      console.error("🐍 Vision STDERR:", err);
-    });
-  }
-
   sendMoveCommand(keys) {
     if (this.motorShell) {
       this.motorShell.send(JSON.stringify(keys));
@@ -140,38 +124,8 @@ class DriverService {
     return this.currentData;
   }
 
-  requestDockingStatus() {
-    if (this.visionShell) {
-      this.visionShell.send(JSON.stringify({ command: "get_docking_status" }));
-    }
-  }
-
-  stopVisionSystem() {
-    if (this.visionShell) {
-      this.visionShell.send(JSON.stringify({ command: "stop_vision" }));
-    }
-  }
-
-  toggleDockingMode(enabled) {
-    if (enabled) {
-      if (!this.visionShell) {
-        console.log("🚀 Starting Docking Mode...");
-        this.initVision(); // This spawns the Python process
-      }
-    } else {
-      if (this.visionShell) {
-        console.log("🛑 Stopping Docking Mode...");
-        this.visionShell.send(JSON.stringify({ command: "stop_vision" }));
-        this.visionShell.end();
-        this.visionShell = null;
-        this.currentData.docking = { status: "off" }; // Clear dashboard data
-      }
-    }
-  }
-
   sync() {
     this.requestTelemetry();
-    this.requestDockingStatus();
   }
 }
 
