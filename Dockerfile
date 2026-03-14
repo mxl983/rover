@@ -1,6 +1,6 @@
 FROM balenalib/raspberrypi3-node:18-bookworm-run
 
-# System packages: Python, I2C, camera, TTS. No vision/OpenCV/numpy.
+# System packages: Python, I2C, camera, TTS, Docker CLI for capture (stop/start mediamtx).
 RUN install_packages \
     python3 \
     python3-pip \
@@ -11,7 +11,8 @@ RUN install_packages \
     espeak-ng \
     uhubctl \
     wireless-tools \
-    build-essential
+    build-essential \
+    docker.io
 
 # Pip will handle adafruit-pureio automatically as a dependency.
 # Install adafruit-blinka first so board_imports.json and Pi detection are present.
