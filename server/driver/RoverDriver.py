@@ -5,6 +5,17 @@ import time
 import select
 import math
 
+def _debug(msg, throttle_interval=0.5, key=None):
+    """Write to stderr for debugging; throttle by key to avoid flood."""
+    now = time.time()
+    if not hasattr(_debug, "_last"):
+        _debug._last = {}
+    k = key if key is not None else "default"
+    if k not in _debug._last or (now - _debug._last[k]) >= throttle_interval:
+        _debug._last[k] = now
+        sys.stderr.write(f"[gimbal] {msg}\n")
+        sys.stderr.flush()
+
 # Force Blinka to use Raspberry Pi 3 when in Docker (so board_imports.json path works)
 if "BLINKA_FORCEBOARD" not in os.environ and sys.platform == "linux":
     os.environ["BLINKA_FORCEBOARD"] = "RASPBERRY_PI_3B"
@@ -33,14 +44,16 @@ class RoverDriver:
         self.analog_drive = None
         self.analog_gimbal = None
         self.last_time = time.time()
-        self.glide_speed = 50.0  # deg/s for keyboard (slightly snappier)
-        self.analog_gimbal_scale = 70.0  # deg/s for full stick (crisp response)
+        self.glide_speed = 100.0  # deg/s for keyboard (snappy)
+        self.analog_gimbal_scale = 115.0  # deg/s (responsive joystick, low latency)
         self.reset_timer = 0
         self.last_report_time = 0
-        self.report_interval = 0.05  # 20 Hz to dashboard for responsive UI
-        self.drive_deadzone = 0.04
-        self.gimbal_deadzone = 0.03
+        self.report_interval = 0.025  # ~40 Hz to dashboard
+        self.drive_deadzone = 0.025
+        self.gimbal_deadzone = 0.012
 
+        self._servo_warned = False
+        self._last_throttle = -1
         try:
             self.kit = ServoKit(channels=16)
             self.pan_channel = 3
@@ -52,13 +65,20 @@ class RoverDriver:
             time.sleep(0.8)
             self.relax_servos()
         except Exception as e:
-            sys.stderr.write(f"Servo hardware error: {e}\n")
+            sys.stderr.write(f"[gimbal] Servo hardware error: {e}\n")
             sys.stderr.flush()
             self.kit = None
+        if self.kit is not None:
+            sys.stderr.write("[gimbal] Servo kit OK (I2C PCA9685); pan=ch3, tilt=ch7\n")
+            sys.stderr.flush()
 
     def apply_servo_positions(self):
         """Applies the calculated angles to the physical hardware."""
         if self.kit is None:
+            if not self._servo_warned:
+                self._servo_warned = True
+                sys.stderr.write("[gimbal] Servos disabled: no I2C kit (e.g. Docker without /dev/i2c-1). Angles would be pan=%.1f tilt=%.1f\n" % (self.pan_angle, self.tilt_angle))
+                sys.stderr.flush()
             return
         final_pan = self.pan_angle + (self.pan_center_point - 90.0)
         final_tilt = self.tilt_angle + (self.tilt_center_point - 90.0)
@@ -66,6 +86,7 @@ class RoverDriver:
         final_tilt = max(0, min(180, final_tilt))
         self.kit.servo[self.pan_channel].angle = final_pan
         self.kit.servo[self.tilt_channel].angle = final_tilt
+        _debug("apply_servo pan=%.1f tilt=%.1f (raw %.1f %.1f)" % (final_pan, final_tilt, self.pan_angle, self.tilt_angle), throttle_interval=0.25, key="apply")
 
     def relax_servos(self):
         """Cuts PWM signal to prevent jitter and save power."""
@@ -94,6 +115,14 @@ class RoverDriver:
             }), flush=True)
             self.last_report_time = now
 
+    def _report_throttle(self, throttle_pct):
+        """Report commanded motor throttle 0-100 for dashboard (immediate rev indicator)."""
+        throttle_pct = round(throttle_pct, 1)
+        if throttle_pct == self._last_throttle:
+            return
+        self._last_throttle = throttle_pct
+        print(json.dumps({"type": "throttle_update", "throttle": throttle_pct}), flush=True)
+
     def update_drive(self):
         """Apply drive commands: analog (400–500) or keyboard WASD. Forward/back corrected for rover wiring."""
         if self.analog_drive is not None:
@@ -102,6 +131,7 @@ class RoverDriver:
             mag = math.sqrt(x * x + y * y)
             if mag < self.drive_deadzone:
                 IIC.control_pwm(0, 0, 0, 0)
+                self._report_throttle(0)
                 return
             mag = min(1.0, mag)
             curve = math.pow(mag, self.speed_curve)  # gentler at low stick
@@ -110,8 +140,13 @@ class RoverDriver:
             h = x * speed
             if abs(v) < 1 and abs(h) < 1:
                 IIC.control_pwm(0, 0, 0, 0)
+                self._report_throttle(0)
                 return
-            IIC.control_speed(int(v + h), int(v + h), int(v - h), int(v - h))
+            fl = v + h
+            fr = v - h
+            IIC.control_speed(int(fl), int(fl), int(fr), int(fr))
+            avg = (abs(fl) + abs(fr)) / 2.0
+            self._report_throttle(min(100, (avg / 500.0) * 100))
             return
 
         data = self.active_keys
@@ -127,9 +162,13 @@ class RoverDriver:
         if v == 0 and h != 0:
             h = (self.base_speed * self.tank_turn_factor) if h > 0 else -(self.base_speed * self.tank_turn_factor)
         if v != 0 or h != 0:
-            IIC.control_speed(int(v + h), int(v + h), int(v - h), int(v - h))
+            fl, fr = v + h, v - h
+            IIC.control_speed(int(fl), int(fl), int(fr), int(fr))
+            avg = (abs(fl) + abs(fr)) / 2.0
+            self._report_throttle(min(100, (avg / 500.0) * 100))
         else:
             IIC.control_pwm(0, 0, 0, 0)
+            self._report_throttle(0)
 
     def update_servos(self):
         """Main loop logic for movement and power management."""
@@ -139,15 +178,20 @@ class RoverDriver:
 
         # Gimbal: analog (all directions reversed to match hardware) or arrow keys
         if self.analog_gimbal is not None:
-            gx = float(self.analog_gimbal.get("x", 0) or 0)
-            gy = float(self.analog_gimbal.get("y", 0) or 0)
-            if abs(gx) > self.gimbal_deadzone or abs(gy) > self.gimbal_deadzone:
+            try:
+                gx = float(self.analog_gimbal.get("x", 0) or 0)
+                gy = float(self.analog_gimbal.get("y", 0) or 0)
+            except (TypeError, ValueError):
+                gx, gy = 0.0, 0.0
+            in_deadzone = not (abs(gx) > self.gimbal_deadzone or abs(gy) > self.gimbal_deadzone)
+            if not in_deadzone:
                 rate = self.analog_gimbal_scale * dt
                 self.pan_angle = max(0, min(180, self.pan_angle - gx * rate))   # reversed
                 self.tilt_angle = max(0, min(180, self.tilt_angle + gy * rate))  # reversed
                 self.apply_servo_positions()
                 self.reset_timer = time.time() + 0.4
                 self.report_angle()
+                _debug("gimbal stick gx=%.3f gy=%.3f -> pan=%.1f tilt=%.1f kit=%s" % (gx, gy, self.pan_angle, self.tilt_angle, "OK" if self.kit else "None"), throttle_interval=0.3, key="stick")
             else:
                 if time.time() < self.reset_timer:
                     self.apply_servo_positions()
@@ -184,7 +228,19 @@ class RoverDriver:
             if "drive" in data:
                 self.analog_drive = data["drive"]
             if "gimbal" in data:
-                self.analog_gimbal = data["gimbal"]
+                g = data["gimbal"]
+                # Keep gimbal mode active; normalize to dict with numeric x,y
+                if g is not None and isinstance(g, dict):
+                    self.analog_gimbal = {
+                        "x": float(g.get("x", 0) or 0),
+                        "y": float(g.get("y", 0) or 0),
+                    }
+                else:
+                    self.analog_gimbal = {"x": 0.0, "y": 0.0}
+                # Debug: log incoming gimbal (throttled)
+                gx, gy = self.analog_gimbal["x"], self.analog_gimbal["y"]
+                if abs(gx) > 0.02 or abs(gy) > 0.02:
+                    _debug("rx gimbal x=%.3f y=%.3f (raw type=%s)" % (gx, gy, type(g).__name__), throttle_interval=0.5, key="rx")
             return
         if isinstance(data, list):
             self.analog_drive = None
@@ -195,17 +251,26 @@ if __name__ == "__main__":
     # Signal to Node.js that the child process is alive
     print(json.dumps({"status": "ready"}), flush=True)
     rover = RoverDriver()
-    
+
     while True:
-        # Tight loop (~67 Hz) for responsive drive/gimbal
-        rlist, _, _ = select.select([sys.stdin], [], [], 0.015)
+        # Tight loop (~500 Hz) for minimal gimbal latency
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.002)
         if rlist:
-            line = sys.stdin.readline()
-            if line:
+            # Drain stdin and apply only the latest command (avoids lag behind mouse burst)
+            last_data = None
+            while True:
+                line = sys.stdin.readline()
+                if not line:
+                    break
                 try:
-                    rover.handle_input(json.loads(line))
-                except:
+                    last_data = json.loads(line)
+                except Exception:
                     pass
-        
+                # Non-blocking check: more data available?
+                rlist, _, _ = select.select([sys.stdin], [], [], 0)
+                if not rlist:
+                    break
+            if last_data is not None:
+                rover.handle_input(last_data)
         rover.update_drive()
         rover.update_servos()

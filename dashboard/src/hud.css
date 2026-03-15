@@ -27,6 +27,11 @@ html {
   overflow: hidden;
 }
 
+/* FPS mouse look: hide system cursor so only crosshair is visible */
+.viewport.viewport-mouse-look {
+  cursor: none;
+}
+
 #videoPlayer {
   position: absolute;
   width: 100%;

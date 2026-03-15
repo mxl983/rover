@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { VideoStream } from "./components/VideoStream";
 import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
@@ -19,7 +19,9 @@ import { ChevronLeft, LogOut } from "lucide-react";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
+import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
 import { useRoverSession } from "./context/RoverSessionContext";
@@ -28,7 +30,7 @@ import { isAllowedCaptureUrl } from "./api/capture";
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login, logout } = useRoverSession();
-  const { stats, isOnline: piOnline } = usePiWebSocket();
+  const { stats, isOnline: piOnline, sendControl } = usePiWebSocket();
   const { isEspOnline, mqttClientRef } = useMqtt(
     isAuthenticated ? sessionCreds : null,
   );
@@ -42,8 +44,12 @@ export default function App() {
   const [actionError, setActionError] = useState(null);
   const [, setSystemLoading] = useState(false);
   const [, setCameraLoading] = useState(false);
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
 
   const isMobile = useIsMobile();
+  const isFullscreen = useFullscreen();
+  const viewportRef = useRef(null);
+  const lastDriveRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     setIsPowered(piOnline);
@@ -51,13 +57,18 @@ export default function App() {
 
   const clearError = () => setActionError(null);
 
-  const handleDriveUpdate = async (keysArray) => {
+  const handleDriveUpdate = (payload) => {
     setActionError(null);
-    try {
-      await apiPostJson(PI_CONTROL_ENDPOINT, keysArray);
-    } catch (err) {
-      setActionError(err.message ?? "Drive command failed");
+    if (typeof payload === "object" && payload?.drive != null) {
+      lastDriveRef.current = payload.drive;
     }
+    if (piOnline && sendControl) {
+      sendControl(payload);
+      return;
+    }
+    apiPostJson(PI_CONTROL_ENDPOINT, payload).catch((err) =>
+      setActionError(err.message ?? "Drive command failed"),
+    );
   };
 
   const handleLoginSuccess = (_client, creds) => {
@@ -198,7 +209,10 @@ export default function App() {
   };
 
   return (
-    <div className="viewport">
+    <div
+      className={`viewport${isPointerLocked ? " viewport-mouse-look" : ""}`}
+      ref={viewportRef}
+    >
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
 
       {!isAuthenticated && (
@@ -207,6 +221,17 @@ export default function App() {
 
       <VideoStream dockingData={stats.docking} />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
+
+      {isAuthenticated && isFullscreen && !isMobile && (
+        <MouseGimbalLayer
+          viewportRef={viewportRef}
+          isFullscreen={isFullscreen}
+          isPointerLocked={isPointerLocked}
+          onPointerLockChange={setIsPointerLocked}
+          onDrive={handleDriveUpdate}
+          lastDriveRef={lastDriveRef}
+        />
+      )}
 
       {isAuthenticated && (
         <div className="hud-overlay">
@@ -316,6 +341,7 @@ function HudFooter({
       battery={stats.battery}
       cpuTemp={stats.cpuTemp}
       latencyMs={stats.latency}
+      throttle={stats.throttle}
       isOffline={!piOnline}
       handleClick={() => onToggleCompact(false)}
     />

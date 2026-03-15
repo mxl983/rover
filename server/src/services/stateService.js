@@ -20,6 +20,7 @@ class StateService {
     this.isDockingMode = false;
     this.pan = 90;
     this.tilt = 90;
+    this.throttle = 0;
   }
 
   getBatteryPct() {
@@ -48,6 +49,7 @@ class StateService {
         docking: this.docking,
         pan: this.pan,
         tilt: this.tilt,
+        throttle: this.throttle,
       };
     } catch (e) {
       console.log(

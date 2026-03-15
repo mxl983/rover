@@ -68,5 +68,13 @@ export function usePiWebSocket() {
     };
   }, []);
 
-  return { stats, isOnline, socketRef };
+  const sendControl = (payload) => {
+    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
+    const msg = Array.isArray(payload)
+      ? { type: "DRIVE", payload }
+      : { type: "DRIVE", drive: payload.drive, gimbal: payload.gimbal };
+    socketRef.current.send(JSON.stringify(msg));
+  };
+
+  return { stats, isOnline, socketRef, sendControl };
 }

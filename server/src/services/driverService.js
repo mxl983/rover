@@ -24,6 +24,11 @@ class DriverService {
     this.motorShell = null;
     this.telemetryShell = null;
     this.currentData = { voltage: 0, distance: 0 };
+    this.broadcast = () => {};
+  }
+
+  setBroadcast(fn) {
+    this.broadcast = fn || (() => {});
   }
 
   start() {
@@ -46,16 +51,17 @@ class DriverService {
 
         // 1. Handle Real-time Servo Angle Updates
         if (data.type === "servo_update") {
-          // Update local state
           this.currentData.pan = data.pan;
           this.currentData.tilt = data.tilt;
-
-          // OPTIONAL: If using Socket.io, emit to frontend here
-          // this.io.emit('servo_state', { pan: data.pan, tilt: data.tilt });
-
           console.log(`📸 Camera at: Pan ${data.pan}°, Tilt ${data.tilt}°`);
           stateService.pan = data.pan;
           stateService.tilt = data.tilt;
+        }
+
+        if (data.type === "throttle_update") {
+          const throttle = data.throttle ?? 0;
+          stateService.throttle = throttle;
+          this.broadcast({ type: "THROTTLE_UPDATE", data: { throttle } });
         }
 
         // 2. Handle the "Ready" status from __main__

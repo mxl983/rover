@@ -18,17 +18,59 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
     drive: { x: 0, y: 0 },
     gimbal: { x: 0, y: 0 },
   });
+  const lastSentRef = useRef({ drive: null, gimbal: null });
+  const DRIVE_CHANGE_THRESHOLD = 0.04;
+  const gimbalRafRef = useRef(null);
 
   useEffect(() => {
     onDriveRef.current = onDrive;
   }, [onDrive]);
 
-  const sendAnalog = () => {
-    if (onDriveRef.current) {
-      onDriveRef.current({
-        drive: { ...analogState.current.drive },
-        gimbal: { ...analogState.current.gimbal },
-      });
+  const driveStateChanged = (a, b) =>
+    a === null ||
+    b === null ||
+    Math.abs((a.x ?? 0) - (b.x ?? 0)) > DRIVE_CHANGE_THRESHOLD ||
+    Math.abs((a.y ?? 0) - (b.y ?? 0)) > DRIVE_CHANGE_THRESHOLD;
+
+  const sendState = (drive, gimbal, updateLast = true) => {
+    if (updateLast) lastSentRef.current = { drive: { ...drive }, gimbal: { ...gimbal } };
+    if (onDriveRef.current) onDriveRef.current({ drive, gimbal });
+  };
+
+  const sendIfChanged = (isStop = false) => {
+    const drive = { ...analogState.current.drive };
+    const gimbal = { ...analogState.current.gimbal };
+    const last = lastSentRef.current;
+    const driveChanged = isStop || driveStateChanged(drive, last.drive);
+    const gimbalChanged =
+      isStop ||
+      last.gimbal === null ||
+      Math.abs((gimbal.x ?? 0) - (last.gimbal.x ?? 0)) > 0.01 ||
+      Math.abs((gimbal.y ?? 0) - (last.gimbal.y ?? 0)) > 0.01;
+    if (!driveChanged && !gimbalChanged) return;
+    sendState(drive, gimbal);
+  };
+
+  const startGimbalRaf = () => {
+    if (gimbalRafRef.current) return;
+    const tick = () => {
+      const drive = { ...analogState.current.drive };
+      const gimbal = { ...analogState.current.gimbal };
+      const mag = Math.sqrt((gimbal.x ?? 0) ** 2 + (gimbal.y ?? 0) ** 2);
+      if (mag < 0.02) {
+        gimbalRafRef.current = null;
+        return;
+      }
+      sendState(drive, gimbal);
+      gimbalRafRef.current = requestAnimationFrame(tick);
+    };
+    gimbalRafRef.current = requestAnimationFrame(tick);
+  };
+
+  const stopGimbalRaf = () => {
+    if (gimbalRafRef.current) {
+      cancelAnimationFrame(gimbalRafRef.current);
+      gimbalRafRef.current = null;
     }
   };
 
@@ -45,12 +87,17 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
       catchDistance: 150,
     };
 
-    const driveManager = nipplejs.create({
+    // Drive stick: larger zone, lower threshold, bigger catch for easier straight-line fwd/back
+    const driveOptions = {
       ...commonOptions,
       zone: leftEl,
       color: "rgba(255, 255, 255, 0.3)",
-    });
+      size: 130,
+      threshold: 0.03,
+      catchDistance: 200,
+    };
 
+    const driveManager = nipplejs.create(driveOptions);
     const lookManager = nipplejs.create({
       ...commonOptions,
       zone: rightEl,
@@ -69,27 +116,66 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
       return { x: Math.cos(rad) * force, y: -Math.sin(rad) * force };
     };
 
+    // Gimbal: linear and less sensitive (scale down so small drag = proportional movement)
+    const GIMBAL_LINEAR_SCALE = 0.58;
+    const toGimbalAnalog = (data) => {
+      const raw = toAnalog(data);
+      return {
+        x: Math.max(-1, Math.min(1, raw.x * GIMBAL_LINEAR_SCALE)),
+        y: Math.max(-1, Math.min(1, raw.y * GIMBAL_LINEAR_SCALE)),
+      };
+    };
+
+    // Wider forward/back capture: when mostly fwd/back, reduce lateral so straight line is easier
+    const toDriveAnalog = (data) => {
+      const raw = toAnalog(data);
+      const ax = raw.x;
+      const ay = raw.y;
+      const absY = Math.abs(ay);
+      const absX = Math.abs(ax);
+      if (absY >= 0.25 && absY >= absX) {
+        const forwardBackScale = 0.35;
+        return { x: ax * forwardBackScale, y: ay };
+      }
+      return raw;
+    };
+
     driveManager.on("move", (evt, data) => {
-      analogState.current.drive = toAnalog(data);
-      sendAnalog();
+      analogState.current.drive = toDriveAnalog(data);
+      sendIfChanged(false);
     });
 
     driveManager.on("end", () => {
       analogState.current.drive = { x: 0, y: 0 };
-      sendAnalog();
+      sendIfChanged(true);
     });
 
     lookManager.on("move", (evt, data) => {
-      analogState.current.gimbal = toAnalog(data);
-      sendAnalog();
+      analogState.current.gimbal = toGimbalAnalog(data);
+      startGimbalRaf();
     });
 
     lookManager.on("end", () => {
+      stopGimbalRaf();
       analogState.current.gimbal = { x: 0, y: 0 };
-      sendAnalog();
+      sendIfChanged(true);
+      const retryStop = () => {
+        if (onDriveRef.current) {
+          onDriveRef.current({
+            drive: { x: 0, y: 0 },
+            gimbal: { x: 0, y: 0 },
+          });
+        }
+      };
+      setTimeout(retryStop, 60);
+      setTimeout(retryStop, 140);
     });
 
     return () => {
+      if (gimbalRafRef.current) {
+        cancelAnimationFrame(gimbalRafRef.current);
+        gimbalRafRef.current = null;
+      }
       driveManager.destroy();
       lookManager.destroy();
     };

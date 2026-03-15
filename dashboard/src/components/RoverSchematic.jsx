@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import PropTypes from "prop-types";
-import { Battery, BatteryCharging, Thermometer, Activity } from "lucide-react";
+import { Battery, BatteryCharging, Thermometer, Activity, Gauge } from "lucide-react";
 
 const TOUCH_TARGET_MIN = 44;
 const SIZE = 88;
@@ -39,6 +39,7 @@ export const RoverSchematic = ({
   battery = null,
   cpuTemp = null,
   latencyMs = null,
+  throttle = null,
   isOffline = false,
   isCharging = false,
   handleClick = () => {},
@@ -72,10 +73,13 @@ export const RoverSchematic = ({
     ? palette.grey
     : bandColor(latencyMs, { good: 80, warn: 200 });
 
+  const throttlePct = throttle != null ? Math.min(100, Math.max(0, throttle)) : 0;
+
   const labelParts = [];
   if (hasBatteryData) labelParts.push(`battery ${Math.round(chargeLevel)}%`);
   if (cpuTemp != null) labelParts.push(`CPU ${Math.round(cpuTemp)}°C`);
   if (latencyMs != null) labelParts.push(`latency ${Math.round(latencyMs)}ms`);
+  labelParts.push(`throttle ${Math.round(throttlePct)}%`);
   if (pan != null) labelParts.push(`pan ${Math.round(pan)}°`);
   labelParts.push(isOffline ? "offline" : "online");
   if (isCharging && !isOffline) labelParts.push("charging");
@@ -88,35 +92,45 @@ export const RoverSchematic = ({
     [handleClick],
   );
 
+  const throttleFrac = clamp01(throttlePct / 100);
+
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${labelParts.join(", ")}. Tap to expand.`}
       style={{
-        width: SIZE,
-        height: SIZE,
-        minWidth: TOUCH_TARGET_MIN,
-        minHeight: TOUCH_TARGET_MIN,
-        boxSizing: "border-box",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        outline: "none",
-        WebkitTapHighlightColor: "transparent",
+        gap: 6,
         pointerEvents: "auto",
         zIndex: 10,
-        touchAction: "manipulation",
-      }}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleClick();
-        }
       }}
     >
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${labelParts.join(", ")}. Tap to expand.`}
+        style={{
+          width: SIZE,
+          height: SIZE,
+          minWidth: TOUCH_TARGET_MIN,
+          minHeight: TOUCH_TARGET_MIN,
+          boxSizing: "border-box",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          outline: "none",
+          WebkitTapHighlightColor: "transparent",
+          touchAction: "manipulation",
+        }}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
+      >
       <svg
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         style={{
@@ -277,6 +291,33 @@ export const RoverSchematic = ({
           </text>
         </g>
       </svg>
+      </div>
+
+      {/* Throttle bar: tachometer-style (green → yellow → red like rev counter) */}
+      <div
+        style={{
+          width: SIZE + 8,
+          height: 4,
+          borderRadius: 0,
+          background: isOffline ? palette.grey : "rgba(0,0,0,0.65)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+        aria-label={`Throttle ${Math.round(throttlePct)}%`}
+      >
+        <div
+          style={{
+            width: `${throttleFrac * 100}%`,
+            height: "100%",
+            background: isOffline
+              ? palette.grey
+              : "linear-gradient(to right, #00f2ff 0%, #00f2ff 35%, #ffd60a 65%, #ff453a 100%)",
+            borderRadius: 0,
+            transition: "width 0.08s ease-out",
+          }}
+        />
+      </div>
     </div>
   );
 };
@@ -286,6 +327,7 @@ RoverSchematic.propTypes = {
   battery: PropTypes.number,
   cpuTemp: PropTypes.number,
   latencyMs: PropTypes.number,
+  throttle: PropTypes.number,
   isOffline: PropTypes.bool,
   isCharging: PropTypes.bool,
   handleClick: PropTypes.func,

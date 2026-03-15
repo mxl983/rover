@@ -5,7 +5,7 @@ import { success, badRequest, asyncHandler } from "../utils/apiResponse.js";
 
 const router = express.Router();
 
-function isValidDrivePayload(body) {
+export function isValidDrivePayload(body) {
   if (Array.isArray(body)) return true;
   if (body && typeof body === "object") {
     if ("drive" in body && body.drive != null && typeof body.drive !== "object") return false;

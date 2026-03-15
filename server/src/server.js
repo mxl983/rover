@@ -12,7 +12,7 @@ import { driverService } from "./services/driverService.js";
 import { stateService } from "./services/stateService.js";
 import cameraRoutes from "./routes/camera.js";
 import systemRoutes from "./routes/system.js";
-import controlRoutes from "./routes/control.js";
+import controlRoutes, { isValidDrivePayload } from "./routes/control.js";
 import { speak } from "./utils/sysUtils.js";
 import {
   initTelemetry,
@@ -166,6 +166,14 @@ setInterval(() => {
   });
 }, 1000);
 
+driverService.setBroadcast((payload) => {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(payload));
+    }
+  });
+});
+
 wss.on("connection", (ws) => {
   logger.info("New browser client connected");
 
@@ -176,13 +184,22 @@ wss.on("connection", (ws) => {
       if (data.type === "PING") {
         stateService.lastPingTimestamp = Date.now();
         ws.send(JSON.stringify({ type: "PONG" }));
+        return;
       }
-      } catch (err) {
-        logger.warn(
-          { err, raw: message.toString() },
-          "Invalid JSON received from WebSocket client",
-        );
+      // Low-latency control: drive/gimbal over WebSocket (no HTTP round-trip)
+      if (data.type === "DRIVE") {
+        const payload = data.payload !== undefined ? data.payload : { drive: data.drive, gimbal: data.gimbal };
+        if (isValidDrivePayload(payload)) {
+          driverService.sendMoveCommand(payload);
+        }
+        return;
       }
+    } catch (err) {
+      logger.warn(
+        { err, raw: message.toString() },
+        "Invalid JSON received from WebSocket client",
+      );
+    }
   });
 
   ws.on("close", () => logger.info("Client disconnected"));
