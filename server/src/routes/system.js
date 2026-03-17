@@ -4,6 +4,7 @@ import { exec } from "child_process";
 import util from "util";
 import { stateService } from "../services/stateService.js";
 import { success, error, badRequest, asyncHandler } from "../utils/apiResponse.js";
+import { speak } from "../utils/sysUtils.js";
 
 const router = express.Router();
 const execPromise = util.promisify(exec);
@@ -13,6 +14,7 @@ router.post(
   asyncHandler((req, res) => {
     fs.writeFileSync("/app/shared/shutdown.req", "shutdown requested at " + new Date().toISOString());
     success(res, { message: "Host shutdown signal sent to Pi." });
+    if (!stateService.quietMode) speak("Shutting down.");
   }),
 );
 
@@ -21,6 +23,23 @@ router.post(
   asyncHandler((req, res) => {
     fs.writeFileSync("/app/shared/reboot.req", "rebooting");
     success(res, { message: "Host reboot sequence initiated." });
+    if (!stateService.quietMode) speak("Rebooting now.");
+  }),
+);
+
+router.get("/quiet-mode", (req, res) => {
+  success(res, { quietMode: stateService.quietMode });
+});
+
+router.post(
+  "/quiet-mode",
+  asyncHandler((req, res) => {
+    const { enabled } = req.body ?? {};
+    if (typeof enabled !== "boolean") {
+      return badRequest(res, "enabled must be true or false");
+    }
+    stateService.quietMode = enabled;
+    success(res, { quietMode: stateService.quietMode });
   }),
 );
 

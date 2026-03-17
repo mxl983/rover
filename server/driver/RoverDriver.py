@@ -54,11 +54,16 @@ class RoverDriver:
 
         self._servo_warned = False
         self._last_throttle = -1
+        self.quick_turn_until = 0.0
+        self.quiet_mode = False  # When True, use slow speed to reduce noise
+        self.quick_turn_dir = 0  # -1 = left, +1 = right
         try:
             self.kit = ServoKit(channels=16)
             self.pan_channel = 3
             self.tilt_channel = 7
-            self.pan_center_point = 100.3
+            # Pan calibration: small tweak (~2.95°) from original
+            # so previous 87.05° reading now shows closer to 90° logical.
+            self.pan_center_point = 97.35
             self.tilt_center_point = 113.69
             # Boot centering
             self.apply_servo_positions()
@@ -104,6 +109,15 @@ class RoverDriver:
         self.reset_timer = time.time() + 1.2 
         self.report_angle(force=True)
 
+    def look_down(self):
+        """Center pan and tilt down to see floor/wheels in tight spaces."""
+        self.pan_angle = 90.0
+        # Parking view: tilt about +60° down from neutral (60° + 90° = 150°)
+        self.tilt_angle = 150.0
+        self.apply_servo_positions()
+        self.reset_timer = time.time() + 1.2
+        self.report_angle(force=True)
+
     def report_angle(self, force=False):
         """Sends current angles to stdout for Node.js/Dashboard."""
         now = time.time()
@@ -125,6 +139,27 @@ class RoverDriver:
 
     def update_drive(self):
         """Apply drive commands: analog (400–500) or keyboard WASD. Forward/back corrected for rover wiring."""
+        now = time.time()
+        # Quiet mode: much slower speeds to reduce noise
+        speed_scale = 0.28 if self.quiet_mode else 1.0
+        base = int(self.base_speed * speed_scale)
+        min_s = int(self.min_speed * speed_scale)
+        max_s = int(self.max_speed * speed_scale)
+
+        # Quick 90° turns (triggered via commands, slow to avoid body shake)
+        if self.quick_turn_until > now and self.quick_turn_dir != 0:
+            turn_speed = base * 0.35
+            h = turn_speed if self.quick_turn_dir > 0 else -turn_speed
+            fl, fr = h, -h
+            IIC.control_speed(int(fl), int(fl), int(fr), int(fr))
+            avg = (abs(fl) + abs(fr)) / 2.0
+            self._report_throttle(min(100, (avg / 500.0) * 100))
+            return
+        elif self.quick_turn_until > 0 and self.quick_turn_until <= now:
+            # End of quick turn window
+            self.quick_turn_until = 0.0
+            self.quick_turn_dir = 0
+
         if self.analog_drive is not None:
             x = float(self.analog_drive.get("x", 0) or 0)
             y = float(self.analog_drive.get("y", 0) or 0)
@@ -135,7 +170,7 @@ class RoverDriver:
                 return
             mag = min(1.0, mag)
             curve = math.pow(mag, self.speed_curve)  # gentler at low stick
-            speed = self.min_speed + (self.max_speed - self.min_speed) * curve
+            speed = min_s + (max_s - min_s) * curve
             v = -y * speed   # forward/back reversed to match rover
             h = x * speed
             if abs(v) < 1 and abs(h) < 1:
@@ -152,15 +187,15 @@ class RoverDriver:
         data = self.active_keys
         v, h = 0, 0
         if "w" in data:
-            v += self.base_speed
+            v += base
         if "s" in data:
-            v -= self.base_speed
+            v -= base
         if "a" in data:
-            h -= self.base_speed * self.turn_factor
+            h -= base * self.turn_factor
         if "d" in data:
-            h += self.base_speed * self.turn_factor
+            h += base * self.turn_factor
         if v == 0 and h != 0:
-            h = (self.base_speed * self.tank_turn_factor) if h > 0 else -(self.base_speed * self.tank_turn_factor)
+            h = (base * self.tank_turn_factor) if h > 0 else -(base * self.tank_turn_factor)
         if v != 0 or h != 0:
             fl, fr = v + h, v - h
             IIC.control_speed(int(fl), int(fl), int(fr), int(fr))
@@ -224,8 +259,31 @@ class RoverDriver:
         if isinstance(data, dict) and data.get("command") == "reset_servos":
             self.reset_servos()
             return
+        if isinstance(data, dict) and data.get("command") == "look_down":
+            self.look_down()
+            return
+        if isinstance(data, dict) and data.get("command") == "turn_left_90_slow":
+            # Slow ~90° left turn; duration tuned so 2.43s ≈ 90° (was 2.7s → ~100°).
+            self.quick_turn_dir = -1
+            self.quick_turn_until = time.time() + 2.43
+            self.analog_drive = None
+            self.active_keys = []
+            return
+        if isinstance(data, dict) and data.get("command") == "turn_right_90_slow":
+            # Slow ~90° right turn; same duration as left (2.43s ≈ 90°).
+            self.quick_turn_dir = 1
+            self.quick_turn_until = time.time() + 2.43
+            self.analog_drive = None
+            self.active_keys = []
+            return
         if isinstance(data, dict):
-            if "drive" in data:
+            if "quietMode" in data:
+                self.quiet_mode = bool(data["quietMode"])
+            if "keys" in data and isinstance(data.get("keys"), list):
+                self.analog_drive = None
+                self.analog_gimbal = None
+                self.active_keys = data["keys"]
+            elif "drive" in data:
                 self.analog_drive = data["drive"]
             if "gimbal" in data:
                 g = data["gimbal"]

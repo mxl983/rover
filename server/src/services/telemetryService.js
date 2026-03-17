@@ -33,15 +33,31 @@ function getDb() {
       usb_power INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON telemetry(created_at);
+    CREATE TABLE IF NOT EXISTS client_connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      event TEXT NOT NULL,
+      client_ip TEXT,
+      user_agent TEXT,
+      device_info TEXT,
+      location_info TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_connections_created_at ON client_connections(created_at);
   `);
   return db;
 }
 
 function cleanup() {
-  if (!db || !config.telemetry.retentionDays) return;
+  if (!db) return;
+  const days = config.telemetry.retentionDays;
+  if (!days || days <= 0) return;
   try {
-    const cutoff = new Date(Date.now() - config.telemetry.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    db.prepare("DELETE FROM telemetry WHERE created_at < ?").run(cutoff);
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const t = db.prepare("DELETE FROM telemetry WHERE created_at < ?").run(cutoff);
+    const c = db.prepare("DELETE FROM client_connections WHERE created_at < ?").run(cutoff);
+    if (t.changes + c.changes > 0) {
+      console.log(`Telemetry retention: removed ${t.changes} telemetry rows, ${c.changes} client_connection rows older than ${days} days`);
+    }
   } catch (e) {
     console.warn("Telemetry cleanup failed:", e.message);
   }
@@ -101,6 +117,32 @@ export function getTelemetry(options = {}) {
   } catch (e) {
     console.warn("Telemetry query failed:", e.message);
     return [];
+  }
+}
+
+export function recordClientConnection(payload) {
+  if (!config.telemetry.enabled) return;
+  if (!db) {
+    try {
+      getDb();
+    } catch (e) {
+      return;
+    }
+  }
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO client_connections (event, client_ip, user_agent, device_info, location_info)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      payload.event ?? "connect",
+      payload.clientIp ?? null,
+      payload.userAgent ?? null,
+      payload.deviceInfo != null ? JSON.stringify(payload.deviceInfo) : null,
+      payload.locationInfo != null ? JSON.stringify(payload.locationInfo) : null,
+    );
+  } catch (e) {
+    console.warn("Client connection record failed:", e.message);
   }
 }
 

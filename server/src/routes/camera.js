@@ -3,6 +3,8 @@ import { exec } from "child_process";
 import util from "util";
 import axios from "axios";
 import { success, error, badRequest, asyncHandler } from "../utils/apiResponse.js";
+import { speak } from "../utils/sysUtils.js";
+import { stateService } from "../services/stateService.js";
 
 const router = express.Router();
 const execPromise = util.promisify(exec);
@@ -20,6 +22,7 @@ router.post(
       );
       const photoUrl = `${req.protocol}://${req.get("host")}/photos/${fileName}`;
       success(res, { url: photoUrl, filename: fileName });
+      if (!stateService.quietMode) speak("High resolution photo captured.");
     } finally {
       exec("DOCKER_API_VERSION=1.44 docker start mediamtx", (err) => {
         if (err) console.error("Failed to restart MediaMTX:", err);
@@ -82,6 +85,7 @@ router.post(
 
     await axios.patch(MEDIAMTX_API, settings);
     success(res, { message: `Focus set to ${mode}` });
+    if (!stateService.quietMode) speak(`Focus set to ${mode}.`);
   }),
 );
 
@@ -97,7 +101,8 @@ router.post(
     "2K": { width: 2304, height: 1296, fps: 15 },
   };
 
-  const target = resMap[mode] || resMap["720p"];
+  const appliedMode = mode && resMap[mode] ? mode : "720p";
+  const target = resMap[appliedMode];
 
   const settings = {
     rpiCameraWidth: target.width,
@@ -106,7 +111,8 @@ router.post(
   };
 
     await axios.patch(MEDIAMTX_API, settings);
-    success(res, { message: `Resolution changed to ${mode}` });
+    success(res, { message: `Resolution changed to ${appliedMode}` });
+    if (!stateService.quietMode) speak(`Resolution set to ${appliedMode}.`);
   }),
 );
 

@@ -15,11 +15,45 @@ export function usePiWebSocket() {
     let socket;
     let reconnectTimeout;
 
+    const sendClientInfo = (sock, location = null) => {
+      if (!sock || sock.readyState !== WebSocket.OPEN) return;
+      const device = {
+        userAgent: navigator.userAgent,
+        screenWidth: window.screen?.width,
+        screenHeight: window.screen?.height,
+        platform: navigator.platform,
+        language: navigator.language,
+      };
+      sock.send(
+        JSON.stringify({
+          type: "CLIENT_INFO",
+          device,
+          location,
+        }),
+      );
+    };
+
     const connect = () => {
       socket = new WebSocket(PI_WEBSOCKET);
       socketRef.current = socket;
 
-      socket.onopen = () => setIsOnline(true);
+      socket.onopen = () => {
+        setIsOnline(true);
+        sendClientInfo(socket);
+        if (navigator.geolocation?.getCurrentPosition) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              sendClientInfo(socketRef.current, {
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+            },
+            () => {},
+            { timeout: 2000, maximumAge: 60000 },
+          );
+        }
+      };
 
       socket.onmessage = (e) => {
         try {

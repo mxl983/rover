@@ -9,6 +9,7 @@ RUN install_packages \
     i2c-tools \
     libcamera-apps-lite \
     espeak-ng \
+    alsa-utils \
     uhubctl \
     wireless-tools \
     build-essential \

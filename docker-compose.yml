@@ -77,6 +77,9 @@ services:
     environment:
       BLINKA_FORCEBOARD: "RASPBERRY_PI_3B"
       BLINKA_FORCECHIP: "BCM2XXX"
+      # ALSA device for TTS (espeak → aplay). With USB speaker, use plughw:1,0 or plughw:2,0.
+      # Run "docker exec control_server aplay -l" to see card numbers; set to the USB speaker card.
+      TTS_ALSA_DEVICE: "plughw:1,0"
 networks:
   rover-net:
     driver: bridge

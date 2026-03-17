@@ -18,8 +18,6 @@ export const VideoStream = ({ dockingData: _dockingData }) => {
   const [roverMicEnabled, setRoverMicEnabled] = useState(false);
   const [dashMicEnabled, setDashMicEnabled] = useState(false);
 
-  // Loader idea: 1 = breathing ring, 2 = arc runner, 3 = chasing dots
-  const LOADER_ID = 1;
 
   const cleanup = (type) => {
     if (type === "video") {
@@ -200,33 +198,13 @@ export const VideoStream = ({ dockingData: _dockingData }) => {
         </button>
       </div>
 
-      {/* LOADING — switch LOADER_ID (1–3) to try different ideas */}
+      {/* LOADING — central dot jumping */}
       {isLoading && (
         <div style={loaderWrapper}>
           <div className="loader-common" style={polygonLoaderStyle}>
-            {/* 1: Breathing ring — single thin circle, gentle pulse */}
-            {LOADER_ID === 1 && (
-              <svg viewBox="0 0 100 100" className="loader-svg">
-                <circle cx="50" cy="50" r="38" fill="none" stroke="#00f2ff" strokeWidth="2" className="loader-breath" />
-              </svg>
-            )}
-            {/* 2: Arc runner — short segment runs around the circle */}
-            {LOADER_ID === 2 && (
-              <svg viewBox="0 0 100 100" className="loader-svg">
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#00f2ff" strokeWidth="3" strokeLinecap="round" strokeDasharray="42 212" className="loader-arc" />
-              </svg>
-            )}
-            {/* 3: Chasing dots — two dots orbit, second lags */}
-            {LOADER_ID === 3 && (
-              <svg viewBox="0 0 100 100" className="loader-svg">
-                <g className="loader-orbit-g loader-dot-first">
-                  <circle cx="86" cy="50" r="5" fill="#00f2ff" />
-                </g>
-                <g className="loader-orbit-g loader-dot-second">
-                  <circle cx="86" cy="50" r="5" fill="#00f2ff" opacity="0.6" />
-                </g>
-              </svg>
-            )}
+            <svg viewBox="0 0 100 100" className="loader-svg">
+              <circle cx="50" cy="50" r="8" fill="#00f2ff" className="loader-dot-jump" />
+            </svg>
           </div>
           <div className="glitch-text polygon-label" style={loaderTextStyle}>
             SIGNAL LOST — RECONNECTING
@@ -252,31 +230,12 @@ export const VideoStream = ({ dockingData: _dockingData }) => {
           width: 100%;
           height: 100%;
         }
-        /* 1: Breathing ring */
-        .loader-breath {
-          transform-origin: 50px 50px;
-          animation: loader-breath 2.2s ease-in-out infinite;
+        .loader-dot-jump {
+          animation: loader-dot-jump 0.6s ease-in-out infinite;
         }
-        @keyframes loader-breath {
-          0%, 100% { opacity: 0.4; transform: scale(0.88); }
-          50% { opacity: 1; transform: scale(1); }
-        }
-        /* 2: Arc runner */
-        .loader-arc {
-          transform-origin: 50px 50px;
-          animation: loader-arc 1s linear infinite;
-        }
-        @keyframes loader-arc {
-          to { transform: rotate(360deg); }
-        }
-        /* 3: Chasing dots — two groups rotate with delay */
-        .loader-orbit-g {
-          transform-origin: 50px 50px;
-          animation: loader-orbit 1.8s linear infinite;
-        }
-        .loader-dot-second { animation-delay: -0.9s; }
-        @keyframes loader-orbit {
-          to { transform: rotate(360deg); }
+        @keyframes loader-dot-jump {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-18px); }
         }
         .polygon-label.glitch-text {
           animation: glitch 1s linear infinite;

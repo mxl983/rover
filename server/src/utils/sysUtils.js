@@ -4,25 +4,53 @@ import playerPkg from "play-sound";
 import path from "path";
 
 /**
- * Speak text on the Pi speaker using espeak-ng (TTS). No-op if espeak-ng is not available.
- * Requires: (1) docker-compose mounts /dev/snd, (2) Pi audio set to correct output (3.5mm or HDMI).
+ * Speak text on the Pi speaker using espeak-ng (TTS) piped to aplay.
+ * In Docker with /dev/snd, espeak-ng's direct ALSA output often fails; piping to aplay fixes that.
+ * With USB speakers, set TTS_ALSA_DEVICE (e.g. plughw:1,0). Voice: TTS_VOICE env or options.voice
+ * (e.g. "en+f1" = English female, "en" = male, "cmn" = Mandarin; run "espeak-ng --voices" for list).
  * @param {string} text - Text to speak (e.g. "System online")
- * @param {object} options - Optional: { speed: 150, lang: 'en' }
+ * @param {object} options - Optional: { speed: 150, voice: 'en+f1', amplitude: 150 } (amplitude 0–200, default 150)
  */
 export function speak(text, options = {}) {
   const speed = options.speed ?? 150;
-  const lang = options.lang ?? "en";
-  const child = spawn("espeak-ng", ["-s", String(speed), "-v", lang, text], {
-    stdio: "ignore",
+  const voice = options.voice ?? process.env.TTS_VOICE ?? "en+f1";
+  const amplitude = options.amplitude ?? (Number(process.env.TTS_AMPLITUDE) || 150);
+  const args = ["-w", "stdout", "-s", String(speed), "-a", String(amplitude), "-v", voice, "--stdin"];
+  const espeak = spawn("espeak-ng", args, {
+    stdio: ["pipe", "pipe", "ignore"],
   });
-  child.on("error", (err) => {
+  const device = process.env.TTS_ALSA_DEVICE || "default";
+  const aplayArgs = device === "default" ? ["-q"] : ["-D", device, "-q"];
+  const aplay = spawn("aplay", aplayArgs, {
+    stdio: ["pipe", "ignore", "ignore"],
+  });
+  espeak.stdout.pipe(aplay.stdin);
+  espeak.stdout.on("error", (err) => {
+    if (err.code !== "EPIPE") console.warn("TTS (espeak-ng stdout):", err.message);
+  });
+  aplay.stdin.on("error", (err) => {
+    if (err.code !== "EPIPE") console.warn("TTS (aplay stdin):", err.message);
+  });
+  espeak.on("error", (err) => {
     console.warn("TTS (espeak-ng) unavailable:", err.message);
   });
-  child.on("close", (code) => {
+  aplay.on("error", (err) => {
+    console.warn("TTS (aplay) unavailable:", err.message);
+  });
+  aplay.on("close", (code) => {
+    if (code && code !== 0) {
+      console.warn("TTS (aplay) exited with code", code);
+    }
+    aplay.stdin.end();
+  });
+  espeak.on("close", (code) => {
     if (code && code !== 0) {
       console.warn("TTS (espeak-ng) exited with code", code);
     }
+    aplay.stdin.end();
   });
+  espeak.stdin.write(text, "utf8");
+  espeak.stdin.end();
 }
 
 const player = playerPkg({ player: "mpg123" });

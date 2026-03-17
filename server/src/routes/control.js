@@ -8,6 +8,12 @@ const router = express.Router();
 export function isValidDrivePayload(body) {
   if (Array.isArray(body)) return true;
   if (body && typeof body === "object") {
+    if (
+      body.command === "look_down" ||
+      body.command === "turn_left_90_slow" ||
+      body.command === "turn_right_90_slow"
+    )
+      return true;
     if ("drive" in body && body.drive != null && typeof body.drive !== "object") return false;
     if ("gimbal" in body && body.gimbal != null && typeof body.gimbal !== "object") return false;
     return true;
@@ -21,7 +27,9 @@ router.post(
     if (!isValidDrivePayload(req.body)) {
       return badRequest(res, "Body must be an array of keys or { drive?, gimbal? }");
     }
-    driverService.sendMoveCommand(req.body);
+    const quiet = stateService.quietMode;
+    const cmd = Array.isArray(req.body) ? { keys: req.body, quietMode: quiet } : { ...req.body, quietMode: quiet };
+    driverService.sendMoveCommand(cmd);
     success(res, { accepted: true });
   }),
 );

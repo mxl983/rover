@@ -36,8 +36,12 @@ class DriverService {
     this.initTelemetry();
     this.autoDocker = new AutoDocker((keys) => {
       console.log(`I try to move rover myself: ${keys}`);
-      if (this.motorShell) {
+      if (!this.motorShell) return;
+      try {
         this.motorShell.send(JSON.stringify(keys));
+      } catch (err) {
+        if (err.code !== "EPIPE") console.warn("Motor send error:", err.message);
+        this.motorShell = null;
       }
     });
   }
@@ -112,17 +116,37 @@ class DriverService {
         console.error("Voltage Parse Error", e);
       }
     });
+
+    this.telemetryShell.on("error", (err) => {
+      console.warn("🐍 Telemetry process error:", err.message || err);
+      this.telemetryShell = null;
+    });
+
+    this.telemetryShell.on("close", (code, signal) => {
+      this.telemetryShell = null;
+      if (code !== 0 && code !== null) {
+        console.warn("🐍 Telemetry process exited (code=%s). Voltage/distance will stale until restart.", code);
+      }
+    });
   }
 
   sendMoveCommand(keys) {
-    if (this.motorShell) {
+    if (!this.motorShell) return;
+    try {
       this.motorShell.send(JSON.stringify(keys));
+    } catch (err) {
+      if (err.code !== "EPIPE") console.warn("Motor send error:", err.message);
+      this.motorShell = null;
     }
   }
 
   requestTelemetry() {
-    if (this.telemetryShell) {
+    if (!this.telemetryShell) return;
+    try {
       this.telemetryShell.send(JSON.stringify({ command: "get_telemetry" }));
+    } catch (err) {
+      if (err.code !== "EPIPE") console.warn("Telemetry send error:", err.message);
+      this.telemetryShell = null;
     }
   }
 

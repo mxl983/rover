@@ -19,12 +19,27 @@ import {
   recordTelemetry,
   getTelemetry,
   closeTelemetry,
+  recordClientConnection,
 } from "./services/telemetryService.js";
 import { success, error } from "./utils/apiResponse.js";
 import { logger } from "./utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Return platform name from User-Agent for TTS (e.g. "Android", "MacBook", "iPhone"). */
+function getPlatformHint(userAgent) {
+  if (!userAgent || typeof userAgent !== "string") return null;
+  const ua = userAgent.slice(0, 300);
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Android/i.test(ua)) return "Android";
+  if (/Macintosh|Mac OS X|Mac_PowerPC/i.test(ua)) return "MacBook";
+  if (/Windows NT|Windows /i.test(ua)) return "Windows";
+  if (/CrOS/i.test(ua)) return "Chrome OS";
+  if (/Linux/i.test(ua)) return "Linux";
+  return null;
+}
 
 // Connect to pub-sub service
 mqttService.connect();
@@ -49,6 +64,9 @@ const GRACE_PERIOD_MS = 2 * 60 * 1000;
 
 // Time it takes until system entering power saving mode
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+// Speak warning this long before idle shutdown
+const IDLE_WARNING_BEFORE_MS = 60 * 1000;
+let idleWarningSpoken = false;
 
 // Set allowed origin
 const corsOptions = {
@@ -129,6 +147,19 @@ setInterval(() => {
 
   // Power saving
   const timeSinceLastPing = now - stateService.lastPingTimestamp;
+  if (timeSinceLastPing < IDLE_TIMEOUT_MS - IDLE_WARNING_BEFORE_MS) {
+    idleWarningSpoken = false;
+  }
+  if (
+    timeSinceStartup > GRACE_PERIOD_MS &&
+    timeSinceLastPing >= IDLE_TIMEOUT_MS - IDLE_WARNING_BEFORE_MS &&
+    timeSinceLastPing < IDLE_TIMEOUT_MS &&
+    !idleWarningSpoken &&
+    !stateService.isShuttingDown
+  ) {
+    idleWarningSpoken = true;
+    if (!stateService.quietMode) speak("If you don't use me in the next 60 seconds I will go to sleep to save power.");
+  }
   if (
     timeSinceStartup > GRACE_PERIOD_MS &&
     timeSinceLastPing > IDLE_TIMEOUT_MS &&
@@ -174,8 +205,17 @@ driverService.setBroadcast((payload) => {
   });
 });
 
-wss.on("connection", (ws) => {
-  logger.info("New browser client connected");
+wss.on("connection", (ws, request) => {
+  const clientIp = request.socket?.remoteAddress ?? request.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ?? null;
+  const userAgent = request.headers?.["user-agent"] ?? null;
+  logger.info({ clientIp, userAgent: userAgent?.slice(0, 60) }, "New browser client connected");
+  recordClientConnection({
+    event: "connect",
+    clientIp,
+    userAgent,
+  });
+  const platform = getPlatformHint(userAgent);
+  if (!stateService.quietMode) speak(platform ? `Dashboard connected from ${platform}` : "Dashboard connected");
 
   ws.on("message", (message) => {
     try {
@@ -190,8 +230,23 @@ wss.on("connection", (ws) => {
       if (data.type === "DRIVE") {
         const payload = data.payload !== undefined ? data.payload : { drive: data.drive, gimbal: data.gimbal };
         if (isValidDrivePayload(payload)) {
-          driverService.sendMoveCommand(payload);
+          const quiet = stateService.quietMode;
+          const cmd = Array.isArray(payload) ? { keys: payload, quietMode: quiet } : { ...payload, quietMode: quiet };
+          driverService.sendMoveCommand(cmd);
         }
+        return;
+      }
+      // Optional: client sends device/location once after connect (dashboard can send CLIENT_INFO)
+      if (data.type === "CLIENT_INFO") {
+        const clientIp = request.socket?.remoteAddress ?? request.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ?? null;
+        recordClientConnection({
+          event: "client_info",
+          clientIp,
+          userAgent: request.headers?.["user-agent"] ?? null,
+          deviceInfo: data.device ?? null,
+          locationInfo: data.location ?? null,
+        });
+        logger.info({ device: data.device, location: data.location }, "Client device/location info received");
         return;
       }
     } catch (err) {
@@ -202,7 +257,14 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => logger.info("Client disconnected"));
+  ws.on("close", () => {
+    logger.info("Client disconnected");
+    recordClientConnection({
+      event: "disconnect",
+      clientIp: request.socket?.remoteAddress ?? null,
+      userAgent: request.headers?.["user-agent"] ?? null,
+    });
+  });
 });
 
 const { port, host } = config.server;
@@ -210,7 +272,7 @@ const protocol = config.ssl.enabled && sslOptions ? "https" : "http";
 
 server.listen(port, host, () => {
   logger.info({ host, port, protocol }, "Server listening");
-  speak("System online");
+  if (!stateService.quietMode) speak("System online");
 });
 
 async function handleIdleShutdown() {

@@ -52,6 +52,7 @@ const config = {
   telemetry: {
     enabled: parseBoolean(process.env.TELEMETRY_ENABLED, true),
     dbPath: process.env.TELEMETRY_DB_PATH || "/app/data/telemetry.db",
+    /** Keep data for this many days; older rows in telemetry and client_connections are deleted. Set TELEMETRY_RETENTION_DAYS to override. */
     retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 7),
   },
 };

@@ -11,6 +11,8 @@ import {
   Camera,
   Check,
   Aperture,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -19,6 +21,8 @@ export const SystemControls = ({
   resMode,
   focusMode,
   isCapturing,
+  quietMode,
+  onQuietModeChange,
   onNVToggle,
   onResChange,
   onFocusChange,
@@ -143,6 +147,17 @@ export const SystemControls = ({
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>
           </DropdownMenu.Sub>
+
+          <DropdownMenu.Separator style={styles.separator} />
+
+          {/* QUIET MODE */}
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onQuietModeChange && onQuietModeChange(!quietMode)}
+          >
+            {quietMode ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            <span>Quiet mode: {quietMode ? "ON" : "OFF"}</span>
+          </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />
 

@@ -9,6 +9,7 @@ export const Meters = ({ stats, compact }) => {
         battery={stats.battery}
         cpuTemp={stats.cpuTemp}
         latencyMs={stats.latency}
+        isCharging={stats.isCharging}
       />
       {compact ? null : (
         <>

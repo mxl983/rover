@@ -179,6 +179,15 @@ export default function App() {
     }
   };
 
+  const setQuietMode = async (enabled) => {
+    setActionError(null);
+    try {
+      await apiPostJson(`${PI_SYSTEM_ENDPOINT}/quiet-mode`, { enabled });
+    } catch (err) {
+      setActionError(err.message ?? "Quiet mode update failed");
+    }
+  };
+
   const handleCapture = async () => {
     setIsCapturing(true);
     setActionError(null);
@@ -205,6 +214,26 @@ export default function App() {
       await apiPostJson(PI_CONTROL_ENDPOINT, { command: "reset_servos" });
     } catch (err) {
       setActionError(err.message ?? "Camera reset failed");
+    }
+  };
+
+  const handleLookDown = async () => {
+    setActionError(null);
+    try {
+      await apiPostJson(PI_CONTROL_ENDPOINT, { command: "look_down" });
+    } catch (err) {
+      setActionError(err.message ?? "Look down failed");
+    }
+  };
+
+  const handleQuickTurn = async (dir) => {
+    setActionError(null);
+    const command =
+      dir === "L" ? "turn_left_90_slow" : "turn_right_90_slow";
+    try {
+      await apiPostJson(PI_CONTROL_ENDPOINT, { command });
+    } catch (err) {
+      setActionError(err.message ?? "Quick turn failed");
     }
   };
 
@@ -242,6 +271,8 @@ export default function App() {
             resMode={resMode}
             isCapturing={isCapturing}
             focusMode={focusMode}
+            quietMode={stats?.quietMode}
+            onQuietModeChange={setQuietMode}
             onNVToggle={handleNVToggle}
             onResChange={handleResChange}
             onAction={handleSystemAction}
@@ -257,6 +288,9 @@ export default function App() {
             onToggleCompact={setCompact}
             onDrive={handleDriveUpdate}
             onResetCamera={handleCameraReset}
+            onLookDown={handleLookDown}
+            onTurnLeft={() => handleQuickTurn("L")}
+            onTurnRight={() => handleQuickTurn("R")}
             onToggleLight={toggleLight}
             onCapture={handleCapture}
             isCapturing={isCapturing}
@@ -292,6 +326,8 @@ function HudHeader({
   resMode,
   isCapturing,
   focusMode,
+  quietMode,
+  onQuietModeChange,
   onNVToggle,
   onResChange,
   onAction,
@@ -309,6 +345,8 @@ function HudHeader({
           nvActive={nvActive}
           resMode={resMode}
           isCapturing={isCapturing}
+          quietMode={quietMode}
+          onQuietModeChange={onQuietModeChange}
           onNVToggle={onNVToggle}
           onResChange={onResChange}
           onAction={onAction}
@@ -330,6 +368,9 @@ function HudFooter({
   onToggleCompact,
   onDrive,
   onResetCamera,
+  onLookDown,
+  onTurnLeft,
+  onTurnRight,
   onToggleLight,
   onCapture,
   isCapturing,
@@ -343,6 +384,7 @@ function HudFooter({
       latencyMs={stats.latency}
       throttle={stats.throttle}
       isOffline={!piOnline}
+      isCharging={stats.isCharging}
       handleClick={() => onToggleCompact(false)}
     />
   );
@@ -352,7 +394,13 @@ function HudFooter({
       {compact && !isMobile && schematic}
 
       {compact && isMobile && (
-        <DualJoystickControls onDrive={onDrive} onReset={onResetCamera}>
+        <DualJoystickControls
+          onDrive={onDrive}
+          onReset={onResetCamera}
+          onLookDown={onLookDown}
+          onTurnLeft={onTurnLeft}
+          onTurnRight={onTurnRight}
+        >
           {schematic}
         </DualJoystickControls>
       )}
@@ -400,6 +448,9 @@ function HudFooter({
               <DualJoystickControls
                 onDrive={onDrive}
                 onReset={onResetCamera}
+                onLookDown={onLookDown}
+                onTurnLeft={onTurnLeft}
+                onTurnRight={onTurnRight}
               />
             )}
           </>

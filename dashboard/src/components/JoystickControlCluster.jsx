@@ -8,7 +8,14 @@ const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
 const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
 
-export const DualJoystickControls = ({ onDrive, onReset, children }) => {
+export const DualJoystickControls = ({
+  onDrive,
+  onReset,
+  onLookDown,
+  onTurnLeft,
+  onTurnRight,
+  children,
+}) => {
   const leftZoneRef = useRef(null);
   const rightZoneRef = useRef(null);
   const managersRef = useRef({ drive: null, look: null });
@@ -209,6 +216,11 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
           flex-shrink: 0;
         }
 
+        /* Nudge drive joystick inward so the L button isn't off-screen on mobile */
+        .drive-wrapper {
+          margin-left: 16px;
+        }
+
         .j-zone {
           position: absolute;
           top: 0;
@@ -270,6 +282,22 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
           color: #000;
         }
 
+        .sibling-btn-right {
+          left: auto;
+          right: -8px;
+        }
+
+        .drive-sibling-left {
+          top: -8px;
+          left: -8px;
+        }
+
+        .drive-sibling-right {
+          top: -8px;
+          right: -8px;
+          left: auto;
+        }
+
         .center-slot {
           flex: 1;
           display: flex;
@@ -284,11 +312,43 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
         }
       `}</style>
 
-      {/* LEFT JOYSTICK: DRIVE */}
-      <div className="joystick-wrapper">
+      {/* LEFT JOYSTICK: DRIVE + L / R quick turn buttons */}
+      <div className="joystick-wrapper drive-wrapper">
         <div ref={leftZoneRef} className="j-zone">
           <div className="j-label">Drive</div>
         </div>
+
+        <button
+          type="button"
+          className="reset-btn-sibling drive-sibling-left"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onTurnLeft?.();
+          }}
+          style={{ borderRadius: "20px" }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Quick turn left"
+          title="L (slow 90° left)"
+        >
+          L
+        </button>
+
+        <button
+          type="button"
+          className="reset-btn-sibling drive-sibling-right"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onTurnRight?.();
+          }}
+          style={{ borderRadius: "20px" }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Quick turn right"
+          title="R (slow 90° right)"
+        >
+          R
+        </button>
       </div>
 
       {/* HUD CENTER: (Schematics, Status, etc.) */}
@@ -296,12 +356,12 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
         {children}
       </div>
 
-      {/* RIGHT JOYSTICK: GIMBAL + SIBLING RST BUTTON */}
+      {/* RIGHT JOYSTICK: GIMBAL + RST (left) + PRK (right) */}
       <div className="joystick-wrapper">
         <div ref={rightZoneRef} className="j-zone">
           <div className="j-label">Gimbal</div>
         </div>
-        
+
         <button
           type="button"
           className="reset-btn-sibling"
@@ -310,13 +370,27 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
             e.stopPropagation();
             onReset?.();
           }}
-          style={{
-            borderRadius: "20px",
-          }}
-          // Extra safety to ensure nipplejs doesn't see the start of the touch
+          style={{ borderRadius: "20px" }}
           onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Center camera"
         >
           RST
+        </button>
+
+        <button
+          type="button"
+          className="reset-btn-sibling sibling-btn-right"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onLookDown?.();
+          }}
+          style={{ borderRadius: "20px" }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Park camera (downward)"
+          title="PRK (park mode: look down)"
+        >
+          PRK
         </button>
       </div>
     </div>
@@ -326,5 +400,8 @@ export const DualJoystickControls = ({ onDrive, onReset, children }) => {
 DualJoystickControls.propTypes = {
   onDrive: PropTypes.func.isRequired,
   onReset: PropTypes.func,
+  onLookDown: PropTypes.func,
+  onTurnLeft: PropTypes.func,
+  onTurnRight: PropTypes.func,
   children: PropTypes.node,
 };

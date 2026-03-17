@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import PropTypes from "prop-types";
-import { Battery, BatteryCharging, Thermometer, Activity, Gauge } from "lucide-react";
+import { Battery, Thermometer, Activity, Gauge } from "lucide-react";
 
 const TOUCH_TARGET_MIN = 44;
 const SIZE = 88;
@@ -8,9 +8,11 @@ const CENTER = SIZE / 2;
 const R_BATTERY = 34;
 const R_CPU = 26;
 const R_LAT = 18;
+const R_INNER = 12; // center dot; blinking green when charging
 
 const palette = {
   green: "#00f2ff",
+  greenCharging: "#22c55e", // true green for charging blink
   yellow: "#ffd60a",
   red: "#ff453a",
   blue: "#0a84ff",
@@ -82,7 +84,6 @@ export const RoverSchematic = ({
   labelParts.push(`throttle ${Math.round(throttlePct)}%`);
   if (pan != null) labelParts.push(`pan ${Math.round(pan)}°`);
   labelParts.push(isOffline ? "offline" : "online");
-  if (isCharging && !isOffline) labelParts.push("charging");
 
   const onClick = useCallback(
     (e) => {
@@ -93,6 +94,34 @@ export const RoverSchematic = ({
   );
 
   const throttleFrac = clamp01(throttlePct / 100);
+
+  // Rev bar: gradient only for 0..throttle% so segments appear as throttle increases (no full rainbow when short)
+  const throttleBarGradient = (() => {
+    if (isOffline || throttlePct <= 0) return palette.grey;
+    const pct = Math.min(100, throttlePct);
+    const hex = (r, g, b) => "#" + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const parseHex = (h) => {
+      const n = parseInt(h.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    const blend = (c1, c2, t) => {
+      const [r1, g1, b1] = parseHex(c1);
+      const [r2, g2, b2] = parseHex(c2);
+      return hex(lerp(r1, r2, t), lerp(g1, g2, t), lerp(b1, b2, t));
+    };
+    const colorAt = (t) => {
+      if (t <= 35) return blend("#00f2ff", "#22c55e", t / 35);
+      if (t <= 65) return blend("#22c55e", "#ffd60a", (t - 35) / 30);
+      return blend("#ffd60a", "#ff453a", (t - 65) / 35);
+    };
+    const breakpoints = [0, 35, 65, 100].filter((b) => b <= pct);
+    const stops = breakpoints.map((b) => `${colorAt(b)} ${(b / pct) * 100}%`);
+    if (pct > 0 && (stops.length === 0 || breakpoints[breakpoints.length - 1] !== pct)) {
+      stops.push(`${colorAt(pct)} 100%`);
+    }
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  })();
 
   return (
     <div
@@ -154,8 +183,16 @@ export const RoverSchematic = ({
         </defs>
 
         <style>{`
+          @keyframes rover-battery-charge-blink {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+          }
+          .rover-battery-track-charging {
+            animation: rover-battery-charge-blink 1.2s ease-in-out infinite;
+          }
           @media (prefers-reduced-motion: reduce) {
             .rover-schematic-rotate { animation: none !important; }
+            .rover-battery-track-charging { animation: none !important; opacity: 1; }
           }
         `}</style>
 
@@ -196,17 +233,28 @@ export const RoverSchematic = ({
           fill="none"
         />
 
-        {/* Battery ring */}
+        {/* Inner center circle */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={R_INNER}
+          fill="rgba(0,0,0,0.35)"
+          stroke="none"
+          aria-hidden
+        />
+
+        {/* Battery ring (true green blink when charging) */}
         <circle
           cx={CENTER}
           cy={CENTER}
           r={R_BATTERY}
-          stroke={batteryColor}
+          stroke={isCharging && !isOffline ? palette.greenCharging : batteryColor}
           strokeWidth={3}
           fill="none"
           strokeDasharray={`${batteryDash} ${circBattery - batteryDash}`}
           transform={`rotate(-90 ${CENTER} ${CENTER})`}
           strokeLinecap="round"
+          className={isCharging && !isOffline ? "rover-battery-track-charging" : undefined}
         />
 
         {/* CPU ring */}
@@ -269,11 +317,7 @@ export const RoverSchematic = ({
           }}
         >
           {/* Battery Row */}
-          {isCharging && !isOffline ? (
-             <BatteryCharging x={CENTER - 11} y={CENTER - 11} size={6} color={palette.green} strokeWidth={2.5} />
-          ) : (
-             <Battery x={CENTER - 11} y={CENTER - 11} size={6} color={palette.text} strokeWidth={2.5} />
-          )}
+          <Battery x={CENTER - 11} y={CENTER - 11} size={6} color={palette.text} strokeWidth={2.5} />
           <text x={CENTER - 3} y={CENTER - 6} fontSize={5.5} textAnchor="start">
             {hasBatteryData ? `${Math.round(chargeLevel)}%` : isOffline ? "--" : "…"}
           </text>
@@ -310,9 +354,7 @@ export const RoverSchematic = ({
           style={{
             width: `${throttleFrac * 100}%`,
             height: "100%",
-            background: isOffline
-              ? palette.grey
-              : "linear-gradient(to right, #00f2ff 0%, #00f2ff 35%, #ffd60a 65%, #ff453a 100%)",
+            background: isOffline ? palette.grey : throttleBarGradient,
             borderRadius: 0,
             transition: "width 0.08s ease-out",
           }}
