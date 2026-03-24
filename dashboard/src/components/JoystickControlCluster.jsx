@@ -14,6 +14,10 @@ export const DualJoystickControls = ({
   onLookDown,
   onTurnLeft,
   onTurnRight,
+  onLaserToggle,
+  laserOn,
+  onHeadlightToggle,
+  headlightOn,
   children,
 }) => {
   const leftZoneRef = useRef(null);
@@ -42,6 +46,33 @@ export const DualJoystickControls = ({
   const sendState = (drive, gimbal, updateLast = true) => {
     if (updateLast) lastSentRef.current = { drive: { ...drive }, gimbal: { ...gimbal } };
     if (onDriveRef.current) onDriveRef.current({ drive, gimbal });
+  };
+
+  const sendDriveStopWithRetries = () => {
+    analogState.current.drive = { x: 0, y: 0 };
+    const gimbal = { ...analogState.current.gimbal };
+    sendState({ x: 0, y: 0 }, gimbal, true);
+    const retry = () => onDriveRef.current?.({ drive: { x: 0, y: 0 }, gimbal });
+    setTimeout(retry, 45);
+    setTimeout(retry, 110);
+  };
+
+  const sendGimbalStopWithRetries = () => {
+    analogState.current.gimbal = { x: 0, y: 0 };
+    const drive = { ...analogState.current.drive };
+    sendState(drive, { x: 0, y: 0 }, true);
+    const retry = () => onDriveRef.current?.({ drive, gimbal: { x: 0, y: 0 } });
+    setTimeout(retry, 45);
+    setTimeout(retry, 110);
+  };
+
+  const sendAllStopWithRetries = () => {
+    analogState.current.drive = { x: 0, y: 0 };
+    analogState.current.gimbal = { x: 0, y: 0 };
+    sendState({ x: 0, y: 0 }, { x: 0, y: 0 }, true);
+    const retry = () => onDriveRef.current?.({ drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } });
+    setTimeout(retry, 45);
+    setTimeout(retry, 110);
   };
 
   const sendIfChanged = (isStop = false) => {
@@ -99,7 +130,7 @@ export const DualJoystickControls = ({
       ...commonOptions,
       zone: leftEl,
       color: "rgba(255, 255, 255, 0.3)",
-      size: 130,
+      size: 110,
       threshold: 0.03,
       catchDistance: 200,
     };
@@ -153,8 +184,7 @@ export const DualJoystickControls = ({
     });
 
     driveManager.on("end", () => {
-      analogState.current.drive = { x: 0, y: 0 };
-      sendIfChanged(true);
+      sendDriveStopWithRetries();
     });
 
     lookManager.on("move", (evt, data) => {
@@ -164,32 +194,39 @@ export const DualJoystickControls = ({
 
     lookManager.on("end", () => {
       stopGimbalRaf();
-      analogState.current.gimbal = { x: 0, y: 0 };
-      sendIfChanged(true);
-      const retryStop = () => {
-        if (onDriveRef.current) {
-          onDriveRef.current({
-            drive: { x: 0, y: 0 },
-            gimbal: { x: 0, y: 0 },
-          });
-        }
-      };
-      setTimeout(retryStop, 60);
-      setTimeout(retryStop, 140);
+      sendGimbalStopWithRetries();
     });
+
+    const handleSafetyStop = () => {
+      stopGimbalRaf();
+      sendAllStopWithRetries();
+    };
+    const onVisibility = () => {
+      if (document.hidden || document.visibilityState !== "visible") {
+        handleSafetyStop();
+      }
+    };
+    window.addEventListener("blur", handleSafetyStop);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       if (gimbalRafRef.current) {
         cancelAnimationFrame(gimbalRafRef.current);
         gimbalRafRef.current = null;
       }
+      window.removeEventListener("blur", handleSafetyStop);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sendAllStopWithRetries();
       driveManager.destroy();
       lookManager.destroy();
     };
   }, []);
 
   return (
-    <div className="joystick-hud-container">
+    <div
+      className="joystick-hud-container"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <style>{`
         .joystick-hud-container {
           position: fixed;
@@ -205,6 +242,18 @@ export const DualJoystickControls = ({
           box-sizing: border-box;
           pointer-events: none;
           z-index: 9999;
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: none;
+        }
+
+        .joystick-hud-container * {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
         }
 
         /* Fixed container size prevents shifting layout */
@@ -216,10 +265,7 @@ export const DualJoystickControls = ({
           flex-shrink: 0;
         }
 
-        /* Nudge drive joystick inward so the L button isn't off-screen on mobile */
-        .drive-wrapper {
-          margin-left: 16px;
-        }
+        /* Nudge drive joystick inward so the L button isn't off-screen on mobile */ 
 
         .j-zone {
           position: absolute;
@@ -274,6 +320,7 @@ export const DualJoystickControls = ({
           transition: transform 0.1s, background 0.15s, color 0.15s;
           user-select: none;
           -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
         
         .reset-btn-sibling:active {
@@ -298,6 +345,19 @@ export const DualJoystickControls = ({
           left: auto;
         }
 
+        .gimbal-bottom-left {
+          top: auto;
+          bottom: -8px;
+          left: -8px;
+        }
+
+        .gimbal-bottom-right {
+          top: auto;
+          bottom: -8px;
+          left: auto;
+          right: -8px;
+        }
+
         .center-slot {
           flex: 1;
           display: flex;
@@ -313,7 +373,7 @@ export const DualJoystickControls = ({
       `}</style>
 
       {/* LEFT JOYSTICK: DRIVE + L / R quick turn buttons */}
-      <div className="joystick-wrapper drive-wrapper">
+      <div className="joystick-wrapper">
         <div ref={leftZoneRef} className="j-zone">
           <div className="j-label">Drive</div>
         </div>
@@ -392,6 +452,42 @@ export const DualJoystickControls = ({
         >
           PRK
         </button>
+
+        {onLaserToggle && (
+          <button
+            type="button"
+            className="reset-btn-sibling gimbal-bottom-left"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onLaserToggle();
+            }}
+            style={{ borderRadius: "20px" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={laserOn ? "Laser on" : "Laser off"}
+            title="Laser (KY-008 on GPIO17)"
+          >
+            LZR
+          </button>
+        )}
+
+        {onHeadlightToggle && (
+          <button
+            type="button"
+            className="reset-btn-sibling gimbal-bottom-right"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onHeadlightToggle();
+            }}
+            style={{ borderRadius: "20px" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={headlightOn ? "Headlight on" : "Headlight off"}
+            title="Headlight"
+          >
+            HL
+          </button>
+        )}
       </div>
     </div>
   );
@@ -403,5 +499,9 @@ DualJoystickControls.propTypes = {
   onLookDown: PropTypes.func,
   onTurnLeft: PropTypes.func,
   onTurnRight: PropTypes.func,
+  onLaserToggle: PropTypes.func,
+  laserOn: PropTypes.bool,
+  onHeadlightToggle: PropTypes.func,
+  headlightOn: PropTypes.bool,
   children: PropTypes.node,
 };

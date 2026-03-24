@@ -48,6 +48,10 @@ driverService.start();
 initTelemetry();
 
 function onShutdown() {
+  const health = stateService.getHealth?.() ?? {};
+  if (health && Object.keys(health).length) {
+    recordTelemetry(health, "before_power_down_signal");
+  }
   closeTelemetry();
   process.exit(0);
 }
@@ -176,7 +180,7 @@ setInterval(() => {
     timeSinceStartup > 10_000 && // wait 10s after server online
     now - LAST_TELEMETRY_WRITE >= 60_000 // then once per minute
   ) {
-    recordTelemetry(health);
+    recordTelemetry(health, "health_report_scheduled");
     LAST_TELEMETRY_WRITE = now;
   }
 
@@ -272,6 +276,10 @@ const protocol = config.ssl.enabled && sslOptions ? "https" : "http";
 
 server.listen(port, host, () => {
   logger.info({ host, port, protocol }, "Server listening");
+  const health = stateService.getHealth?.() ?? {};
+  if (health && Object.keys(health).length) {
+    recordTelemetry(health, "power_on");
+  }
   if (!stateService.quietMode) speak("System online");
 });
 
@@ -283,7 +291,7 @@ async function handleIdleShutdown() {
     // Final telemetry snapshot right before auto-shutdown
     const health = stateService.getHealth();
     if (health && Object.keys(health).length) {
-      recordTelemetry(health);
+      recordTelemetry(health, "before_power_down_idle");
     }
 
     mqttService.triggerIdleShutdown({

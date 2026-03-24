@@ -182,20 +182,6 @@ export const RoverSchematic = ({
           </filter>
         </defs>
 
-        <style>{`
-          @keyframes rover-battery-charge-blink {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 1; }
-          }
-          .rover-battery-track-charging {
-            animation: rover-battery-charge-blink 1.2s ease-in-out infinite;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .rover-schematic-rotate { animation: none !important; }
-            .rover-battery-track-charging { animation: none !important; opacity: 1; }
-          }
-        `}</style>
-
         {/* Background disc */}
         <circle
           cx={CENTER}
@@ -254,7 +240,6 @@ export const RoverSchematic = ({
           strokeDasharray={`${batteryDash} ${circBattery - batteryDash}`}
           transform={`rotate(-90 ${CENTER} ${CENTER})`}
           strokeLinecap="round"
-          className={isCharging && !isOffline ? "rover-battery-track-charging" : undefined}
         />
 
         {/* CPU ring */}
@@ -337,16 +322,18 @@ export const RoverSchematic = ({
       </svg>
       </div>
 
-      {/* Throttle bar: tachometer-style (green → yellow → red like rev counter) */}
+      {/* Throttle bar slot: fixed space so schematic never shifts */}
       <div
         style={{
           width: SIZE + 8,
           height: 4,
           borderRadius: 0,
-          background: isOffline ? palette.grey : "rgba(0,0,0,0.65)",
+          background: "rgba(0,0,0,0.65)",
           border: "1px solid rgba(255,255,255,0.12)",
           overflow: "hidden",
           boxSizing: "border-box",
+          opacity: throttlePct > 0 && !isOffline ? 1 : 0,
+          transition: "opacity 0.12s ease-out",
         }}
         aria-label={`Throttle ${Math.round(throttlePct)}%`}
       >
@@ -354,7 +341,7 @@ export const RoverSchematic = ({
           style={{
             width: `${throttleFrac * 100}%`,
             height: "100%",
-            background: isOffline ? palette.grey : throttleBarGradient,
+            background: throttleBarGradient,
             borderRadius: 0,
             transition: "width 0.08s ease-out",
           }}

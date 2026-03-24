@@ -249,8 +249,8 @@ export const VideoStream = ({ dockingData: _dockingData }) => {
 // --- SVG ICONS ---
 const SpeakerIcon = ({ active }) => (
   <svg
-    width="24"
-    height="24"
+    width="18"
+    height="18"
     viewBox="0 0 24 24"
     fill="none"
     stroke={active ? "#00f2ff" : "#888"}
@@ -263,13 +263,14 @@ const SpeakerIcon = ({ active }) => (
       fill={active ? "#00f2ff33" : "none"}
     />
     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+    {!active && <line x1="4" y1="20" x2="20" y2="4" stroke="#ff4d4f" strokeWidth="2.4" />}
   </svg>
 );
 
 const MicIcon = ({ active }) => (
   <svg
-    width="24"
-    height="24"
+    width="18"
+    height="18"
     viewBox="0 0 24 24"
     fill="none"
     stroke={active ? "#fff" : "#888"}
@@ -282,6 +283,7 @@ const MicIcon = ({ active }) => (
       fill={active ? "#ff0055" : "none"}
     />
     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+    {!active && <line x1="4" y1="20" x2="20" y2="4" stroke="#ff4d4f" strokeWidth="2.4" />}
   </svg>
 );
 
@@ -338,15 +340,16 @@ const polygonLoaderStyle = {
 };
 
 const btnStyle = (active, color) => ({
-  background: active ? `${color}22` : "rgba(0,0,0,0.5)",
-  border: `1px solid ${active ? color : "#444"}`,
+  background: active ? `${color}22` : "rgba(0,0,0,0.75)",
+  border: `1px solid ${active ? color : "#666"}`,
   borderRadius: "50%",
-  width: "50px",
-  height: "50px",
+  width: "40px",
+  height: "40px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
   transition: "all 0.2s ease",
-  boxShadow: active ? `0 0 15px ${color}44` : "none",
+  boxShadow: active ? `0 0 15px ${color}44` : "inset 0 0 0 1px rgba(255,77,79,0.28)",
+  opacity: active ? 1 : 0.7,
 });

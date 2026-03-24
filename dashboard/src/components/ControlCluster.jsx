@@ -10,6 +10,7 @@ const CONTROL_CONFIG = [
   { key: "arrowdown", label: "▼", grid: 14, python: "ArrowDown", hint: "DN" },
   { key: "arrowright", label: "▶", grid: 15, python: "ArrowRight", hint: "R" },
   { key: "f", label: "💡", grid: 16, type: "action", hint: "F" },
+  { key: "l", label: "🔴", grid: 8, type: "action", hint: "LZR" },
   { key: "g", label: "🎯", grid: 12, type: "action", hint: "G" },
   { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
   { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
@@ -18,10 +19,12 @@ const CONTROL_CONFIG = [
 export const ControlCluster = ({
   onDrive,
   onLightToggle,
+  onLaserToggle,
   onDockingToggle,
   onCapture,
   onReset,
   usbPower,
+  laserOn,
   isDockingMode,
   isCapturing: _isCapturing,
 }) => {
@@ -36,6 +39,7 @@ export const ControlCluster = ({
       // Handle Action Buttons (Toggles/Captures)
       if (isDown && conf.type === "action") {
         if (key === "f") onLightToggle();
+        if (key === "l") onLaserToggle?.();
         if (key === "g") onDockingToggle(!isDockingMode);
         if (key === "c") onCapture();
         if (key === "r") onReset();
@@ -63,6 +67,7 @@ export const ControlCluster = ({
     [
       onDrive,
       onLightToggle,
+      onLaserToggle,
       onDockingToggle,
       onCapture,
       onReset,
@@ -135,6 +140,7 @@ export const ControlCluster = ({
         }
         .active { background: #00f2ff !important; color: #000 !important; }
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
+        .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
         .dock-on { background: #00ff41 !important; color: #000; border-color: #00ff41; }
         .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
@@ -148,6 +154,7 @@ export const ControlCluster = ({
             key={i}
             className={`btn ${activeKeys.has(conf.key) ? "active" : ""} 
               ${conf.key === "f" && usbPower === "on" ? "light-on" : ""}
+              ${conf.key === "l" && laserOn ? "laser-on" : ""}
               ${conf.key === "g" && isDockingMode ? "dock-on" : ""}`}
             // Mouse Handlers
             onMouseDown={() => updateAction(conf.key, true)}

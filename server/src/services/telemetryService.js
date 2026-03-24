@@ -22,6 +22,7 @@ function getDb() {
     CREATE TABLE IF NOT EXISTS telemetry (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      event TEXT,
       voltage REAL,
       battery_pct REAL,
       distance REAL,
@@ -44,6 +45,16 @@ function getDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_client_connections_created_at ON client_connections(created_at);
   `);
+  // Lightweight migration for existing DBs created before telemetry.event existed.
+  try {
+    const cols = db.prepare("PRAGMA table_info(telemetry)").all();
+    const hasEvent = cols.some((c) => c.name === "event");
+    if (!hasEvent) {
+      db.exec("ALTER TABLE telemetry ADD COLUMN event TEXT");
+    }
+  } catch (e) {
+    console.warn("Telemetry schema migration check failed:", e.message);
+  }
   return db;
 }
 
@@ -76,7 +87,7 @@ export function initTelemetry() {
   }
 }
 
-export function recordTelemetry(health) {
+export function recordTelemetry(health, event = "health_report") {
   if (!config.telemetry.enabled || !health) return;
   if (!db) {
     try {
@@ -87,10 +98,11 @@ export function recordTelemetry(health) {
   }
   try {
     const stmt = db.prepare(`
-      INSERT INTO telemetry (voltage, battery_pct, distance, pan, tilt, cpu_temp, cpu_load, wifi_signal, usb_power)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO telemetry (event, voltage, battery_pct, distance, pan, tilt, cpu_temp, cpu_load, wifi_signal, usb_power)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
+      event || "health_report",
       health.voltage ?? null,
       health.battery != null ? parseFloat(health.battery) : null,
       health.distance ?? null,

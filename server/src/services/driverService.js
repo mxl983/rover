@@ -68,6 +68,11 @@ class DriverService {
           this.broadcast({ type: "THROTTLE_UPDATE", data: { throttle } });
         }
 
+        if (data.type === "laser_update") {
+          stateService.laserOn = Boolean(data.on);
+          this.broadcast({ type: "LASER_UPDATE", data: { laserOn: stateService.laserOn } });
+        }
+
         // 2. Handle the "Ready" status from __main__
         if (data.status === "ready") {
           console.log("✅ Rover Python Driver is online and calibrated.");

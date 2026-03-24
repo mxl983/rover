@@ -30,6 +30,11 @@ services:
       - /dev/shm:/dev/shm
       - ./rover.tail9d0237.ts.net.crt:/rover.tail9d0237.ts.net.crt
       - ./rover.tail9d0237.ts.net.key:/rover.tail9d0237.ts.net.key
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Max 10MB per file
+        max-file: "3"     # Keep only 3 old files
     restart: always
 
   control_server:
@@ -80,6 +85,11 @@ services:
       # ALSA device for TTS (espeak → aplay). With USB speaker, use plughw:1,0 or plughw:2,0.
       # Run "docker exec control_server aplay -l" to see card numbers; set to the USB speaker card.
       TTS_ALSA_DEVICE: "plughw:1,0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Max 10MB per file
+        max-file: "3"     # Keep only 3 old files
 networks:
   rover-net:
     driver: bridge

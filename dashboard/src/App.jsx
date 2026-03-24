@@ -4,7 +4,6 @@ import { SubsystemItem } from "./components/SubSystemItem";
 import { Meters } from "./components/Meters";
 import { ControlCluster } from "./components/ControlCluster";
 import {
-  PI_CONTROL_ENDPOINT,
   PI_SYSTEM_ENDPOINT,
   PI_CAMERA_ENDPOINT,
   PI_DOCKING_ENDPOINT,
@@ -20,6 +19,7 @@ import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
+import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
@@ -50,25 +50,70 @@ export default function App() {
   const isFullscreen = useFullscreen();
   const viewportRef = useRef(null);
   const lastDriveRef = useRef({ x: 0, y: 0 });
+  const pendingControlRef = useRef(null);
+  const controlTimerRef = useRef(null);
+
+  const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
 
   useEffect(() => {
     setIsPowered(piOnline);
   }, [piOnline]);
 
   const clearError = () => setActionError(null);
+  const clearErrorIfAny = () => setActionError((prev) => (prev ? null : prev));
+
+  const sendControlNow = (payload) => {
+    if (piOnline && sendControl) {
+      sendControl(payload);
+      return Promise.resolve();
+    }
+    setActionError("Control channel offline (WebSocket not connected)");
+    return Promise.resolve();
+  };
+
+  const flushPendingControl = () => {
+    controlTimerRef.current = null;
+    const payload = pendingControlRef.current;
+    if (!payload) return;
+    pendingControlRef.current = null;
+    void sendControlNow(payload);
+  };
+
+  const queueControl = (patch) => {
+    const prev = pendingControlRef.current ?? {};
+    pendingControlRef.current = { ...prev, ...patch };
+    if (controlTimerRef.current != null) return;
+    controlTimerRef.current = setTimeout(flushPendingControl, CONTROL_INTERVAL_WS_MS);
+  };
+
+  useEffect(
+    () => () => {
+      if (controlTimerRef.current != null) {
+        clearTimeout(controlTimerRef.current);
+        controlTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   const handleDriveUpdate = (payload) => {
-    setActionError(null);
+    clearErrorIfAny();
+    if (Array.isArray(payload)) {
+      // Keyboard control arrays are sparse and should remain immediate.
+      void sendControlNow(payload);
+      return;
+    }
     if (typeof payload === "object" && payload?.drive != null) {
       lastDriveRef.current = payload.drive;
     }
-    if (piOnline && sendControl) {
-      sendControl(payload);
-      return;
+    if (typeof payload === "object" && payload) {
+      queueControl(payload);
     }
-    apiPostJson(PI_CONTROL_ENDPOINT, payload).catch((err) =>
-      setActionError(err.message ?? "Drive command failed"),
-    );
+  };
+
+  const handleGimbalUpdate = (gimbal) => {
+    clearErrorIfAny();
+    queueControl({ gimbal });
   };
 
   const handleLoginSuccess = (_client, creds) => {
@@ -210,31 +255,24 @@ export default function App() {
 
   const handleCameraReset = async () => {
     setActionError(null);
-    try {
-      await apiPostJson(PI_CONTROL_ENDPOINT, { command: "reset_servos" });
-    } catch (err) {
-      setActionError(err.message ?? "Camera reset failed");
-    }
+    await sendControlNow({ command: "reset_servos" });
   };
 
   const handleLookDown = async () => {
     setActionError(null);
-    try {
-      await apiPostJson(PI_CONTROL_ENDPOINT, { command: "look_down" });
-    } catch (err) {
-      setActionError(err.message ?? "Look down failed");
-    }
+    await sendControlNow({ command: "look_down" });
   };
 
   const handleQuickTurn = async (dir) => {
     setActionError(null);
     const command =
       dir === "L" ? "turn_left_90_slow" : "turn_right_90_slow";
-    try {
-      await apiPostJson(PI_CONTROL_ENDPOINT, { command });
-    } catch (err) {
-      setActionError(err.message ?? "Quick turn failed");
-    }
+    await sendControlNow({ command });
+  };
+
+  const handleLaserToggle = async () => {
+    setActionError(null);
+    await sendControlNow({ command: "toggle_laser" });
   };
 
   return (
@@ -250,6 +288,12 @@ export default function App() {
 
       <VideoStream dockingData={stats.docking} />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
+
+      {isAuthenticated && isMobile && (
+        <MobileTouchGimbalLayer
+          onGimbal={handleGimbalUpdate}
+        />
+      )}
 
       {isAuthenticated && isFullscreen && !isMobile && (
         <MouseGimbalLayer
@@ -291,6 +335,8 @@ export default function App() {
             onLookDown={handleLookDown}
             onTurnLeft={() => handleQuickTurn("L")}
             onTurnRight={() => handleQuickTurn("R")}
+            onLaserToggle={handleLaserToggle}
+            laserOn={stats.laserOn}
             onToggleLight={toggleLight}
             onCapture={handleCapture}
             isCapturing={isCapturing}
@@ -336,7 +382,7 @@ function HudHeader({
   return (
     <div className="hud-header">
       <div className="glass-card hud-header-brand">
-        <div>Mango Rover V1.0</div>
+        <div>Mango Mate</div>
         {wifiSignal && <WifiSignal dbm={wifiSignal} />}
       </div>
       <div className="glass-card hud-header-actions">
@@ -371,6 +417,8 @@ function HudFooter({
   onLookDown,
   onTurnLeft,
   onTurnRight,
+  onLaserToggle,
+  laserOn,
   onToggleLight,
   onCapture,
   isCapturing,
@@ -400,6 +448,13 @@ function HudFooter({
           onLookDown={onLookDown}
           onTurnLeft={onTurnLeft}
           onTurnRight={onTurnRight}
+          onLaserToggle={onLaserToggle}
+          laserOn={laserOn}
+          onHeadlightToggle={() => {
+            const nextState = stats.usbPower === "on" ? "off" : "on";
+            onToggleLight(nextState);
+          }}
+          headlightOn={stats.usbPower === "on"}
         >
           {schematic}
         </DualJoystickControls>
@@ -433,11 +488,13 @@ function HudFooter({
                 onDockingToggle={onDockingToggle}
                 onDrive={onDrive}
                 usbPower={stats.usbPower}
+                laserOn={laserOn}
                 onLightToggle={() => {
                   const nextState =
                     stats.usbPower === "on" ? "off" : "on";
                   onToggleLight(nextState);
                 }}
+                onLaserToggle={onLaserToggle}
                 isDockingMode={stats.isDockingMode}
                 onCapture={onCapture}
                 isCapturing={isCapturing}
@@ -451,6 +508,13 @@ function HudFooter({
                 onLookDown={onLookDown}
                 onTurnLeft={onTurnLeft}
                 onTurnRight={onTurnRight}
+                onLaserToggle={onLaserToggle}
+                laserOn={laserOn}
+                onHeadlightToggle={() => {
+                  const nextState = stats.usbPower === "on" ? "off" : "on";
+                  onToggleLight(nextState);
+                }}
+                headlightOn={stats.usbPower === "on"}
               />
             )}
           </>

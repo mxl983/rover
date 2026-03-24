@@ -11,7 +11,8 @@ export function isValidDrivePayload(body) {
     if (
       body.command === "look_down" ||
       body.command === "turn_left_90_slow" ||
-      body.command === "turn_right_90_slow"
+      body.command === "turn_right_90_slow" ||
+      body.command === "toggle_laser"
     )
       return true;
     if ("drive" in body && body.drive != null && typeof body.drive !== "object") return false;

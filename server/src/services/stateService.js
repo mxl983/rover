@@ -34,6 +34,8 @@ class StateService {
     this.pan = 90;
     this.tilt = 90;
     this.throttle = 0;
+    /** KY-008 laser on GPIO17: true = on, false = off. */
+    this.laserOn = false;
     /** When true, rover uses slow speed and all TTS announcements are off. */
     this.quietMode = false;
   }
@@ -97,6 +99,7 @@ class StateService {
         pan: this.pan,
         tilt: this.tilt,
         throttle: this.throttle,
+        laserOn: this.laserOn,
         quietMode: this.quietMode,
       };
     } catch (e) {

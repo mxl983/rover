@@ -77,6 +77,39 @@ class RoverDriver:
             sys.stderr.write("[gimbal] Servo kit OK (I2C PCA9685); pan=ch3, tilt=ch7\n")
             sys.stderr.flush()
 
+        # KY-008 laser on GPIO17; init lazily on first toggle to avoid touching GPIO at startup
+        self.laser_on = False
+        self._laser_pin = None
+
+    def _ensure_laser_pin(self):
+        """Lazy-init GPIO17 for laser; no-op if not on Pi or GPIO unavailable."""
+        if self._laser_pin is not None:
+            return True
+        try:
+            import board
+            import digitalio
+            self._laser_pin = digitalio.DigitalInOut(board.D17)
+            self._laser_pin.direction = digitalio.Direction.OUTPUT
+            self._laser_pin.value = False
+            sys.stderr.write("[gimbal] Laser GPIO17 (KY-008) initialized\n")
+            sys.stderr.flush()
+            return True
+        except Exception as e:
+            sys.stderr.write("[gimbal] Laser GPIO17 init failed: %s\n" % e)
+            sys.stderr.flush()
+            return False
+
+    def set_laser(self, on):
+        """Set laser on/off and report state to dashboard."""
+        self.laser_on = bool(on)
+        if self._ensure_laser_pin():
+            self._laser_pin.value = self.laser_on
+        print(json.dumps({"type": "laser_update", "on": self.laser_on}), flush=True)
+
+    def toggle_laser(self):
+        """Toggle laser on/off."""
+        self.set_laser(not self.laser_on)
+
     def apply_servo_positions(self):
         """Applies the calculated angles to the physical hardware."""
         if self.kit is None:
@@ -276,6 +309,9 @@ class RoverDriver:
             self.analog_drive = None
             self.active_keys = []
             return
+        if isinstance(data, dict) and data.get("command") == "toggle_laser":
+            self.toggle_laser()
+            return
         if isinstance(data, dict):
             if "quietMode" in data:
                 self.quiet_mode = bool(data["quietMode"])
@@ -311,8 +347,8 @@ if __name__ == "__main__":
     rover = RoverDriver()
 
     while True:
-        # Tight loop (~500 Hz) for minimal gimbal latency
-        rlist, _, _ = select.select([sys.stdin], [], [], 0.002)
+        # Tight loop (~1000 Hz) for minimal gimbal latency
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.001)
         if rlist:
             # Drain stdin and apply only the latest command (avoids lag behind mouse burst)
             last_data = None

@@ -111,6 +111,30 @@ html {
   box-sizing: border-box;
 }
 
+/* Mobile FPS-style touch-look area:
+   captures drag in center video region while keeping top controls and bottom joystick free. */
+.mobile-touch-gimbal-layer {
+  position: absolute;
+  top: max(72px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  bottom: max(170px, env(safe-area-inset-bottom));
+  z-index: 8;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (orientation: landscape) {
+  .mobile-touch-gimbal-layer {
+    top: max(48px, env(safe-area-inset-top));
+    bottom: max(104px, env(safe-area-inset-bottom));
+  }
+}
+
 .hud-overlay button,
 .glass-card {
   background: var(--glass);

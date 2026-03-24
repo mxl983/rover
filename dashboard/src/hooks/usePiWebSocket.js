@@ -104,9 +104,13 @@ export function usePiWebSocket() {
 
   const sendControl = (payload) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;
-    const msg = Array.isArray(payload)
+    // Only use payload wrapper for command-only messages (e.g. toggle_laser); keep drive/gimbal at top level for compatibility
+    const hasCommand = payload && payload.command !== undefined;
+    const msg = hasCommand
       ? { type: "DRIVE", payload }
-      : { type: "DRIVE", drive: payload.drive, gimbal: payload.gimbal };
+      : Array.isArray(payload)
+        ? { type: "DRIVE", payload }
+        : { type: "DRIVE", drive: payload.drive, gimbal: payload.gimbal };
     socketRef.current.send(JSON.stringify(msg));
   };
 

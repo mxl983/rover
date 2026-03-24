@@ -12,9 +12,23 @@ const HEARTBEAT_TOPIC = "rover/esp/heartbeat";
 export function useMqtt(sessionCreds) {
   const [isEspOnline, setIsEspOnline] = useState(false);
   const mqttClientRef = useRef(null);
+  const didWakeRef = useRef(false);
 
   useEffect(() => {
     if (!sessionCreds) return;
+    didWakeRef.current = false;
+
+    const isDashboardUrlHit = () => {
+      if (typeof window === "undefined") return false;
+      const p = window.location?.pathname || "/";
+      // Supports both deployed subpath (/rover/) and local dev (/)
+      return p === "/" || p.startsWith("/rover");
+    };
+
+    const canWakeNow = () => {
+      if (typeof document === "undefined") return false;
+      return document.visibilityState === "visible" && !document.hidden && isDashboardUrlHit();
+    };
 
     const client = mqtt.connect(MQTT_HOST, {
       username: sessionCreds.username,
@@ -24,11 +38,17 @@ export function useMqtt(sessionCreds) {
 
     mqttClientRef.current = client;
 
-    // On reconnect or fresh connect, make sure the rover is awake.
-    client.on("connect", () => {
+    const tryWakeRover = () => {
+      if (didWakeRef.current) return;
+      if (client.connected !== true) return;
+      if (!canWakeNow()) return;
       client.publish("rover/power/pi", "On", { qos: 1 });
       client.publish("rover/power/aux", "On", { qos: 1 });
-    });
+      didWakeRef.current = true;
+    };
+
+    // Wake only when page is actively visible and opened on dashboard URL.
+    client.on("connect", tryWakeRover);
 
     client.subscribe(HEARTBEAT_TOPIC, (err) => {
       if (err) return;
@@ -38,7 +58,13 @@ export function useMqtt(sessionCreds) {
       if (topic === HEARTBEAT_TOPIC) setIsEspOnline(true);
     });
 
+    const onVisible = () => tryWakeRover();
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
       client.end();
     };
   }, [sessionCreds]);
