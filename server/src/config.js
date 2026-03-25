@@ -55,6 +55,12 @@ const config = {
     /** Keep data for this many days; older rows in telemetry and client_connections are deleted. Set TELEMETRY_RETENTION_DAYS to override. */
     retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 7),
   },
+  deepseek: {
+    apiKey: process.env.DEEPSEEK_API_KEY || "",
+    baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    timeoutMs: parseNumber(process.env.DEEPSEEK_TIMEOUT_MS, 12_000),
+  },
 };
 
 export default config;

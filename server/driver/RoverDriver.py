@@ -135,6 +135,8 @@ class RoverDriver:
 
     def reset_servos(self):
         """Smoothly returns camera to 90/90 center."""
+        # Drop stale joystick/voice gimbal so reset is not immediately undone.
+        self.analog_gimbal = None
         self.pan_angle = 90.0
         self.tilt_angle = 90.0
         self.apply_servo_positions()
@@ -144,6 +146,7 @@ class RoverDriver:
 
     def look_down(self):
         """Center pan and tilt down to see floor/wheels in tight spaces."""
+        self.analog_gimbal = None
         self.pan_angle = 90.0
         # Parking view: tilt about +60° down from neutral (60° + 90° = 150°)
         self.tilt_angle = 150.0

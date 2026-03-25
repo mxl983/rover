@@ -13,7 +13,7 @@ class TelemetryMonitor:
     def __init__(self):
         # We call this to ensure the board is awake and ADCs are active
         self.ppr = 11 * 30 * 10
-        self.diameter = 75.0
+        self.diameter = 60.0
         self.circumference = self.diameter * math.pi
         self.last_ticks = 0
         self.total_mileage_mm = 0

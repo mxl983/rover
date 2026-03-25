@@ -19,7 +19,7 @@ router.post(
     }
     fs.writeFileSync("/app/shared/shutdown.req", "shutdown requested at " + new Date().toISOString());
     success(res, { message: "Host shutdown signal sent to Pi." });
-    if (!stateService.quietMode) speak("Shutting down.");
+    if (!stateService.quietMode) speak("系统即将关机。", { language: "zh" });
   }),
 );
 
@@ -32,7 +32,7 @@ router.post(
     }
     fs.writeFileSync("/app/shared/reboot.req", "rebooting");
     success(res, { message: "Host reboot sequence initiated." });
-    if (!stateService.quietMode) speak("Rebooting now.");
+    if (!stateService.quietMode) speak("系统正在重启。", { language: "zh" });
   }),
 );
 

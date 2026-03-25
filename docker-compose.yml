@@ -26,6 +26,8 @@ services:
       - /dev/video12:/dev/video12
     volumes:
       - ./mediamtx.yml:/mediamtx.yml
+      # Mix WebRTC/ffmpeg playback with control_server TTS on one USB speaker (ALSA dmix)
+      - ./alsa/asound.conf:/etc/asound.conf:ro
       - /dev:/dev
       - /dev/shm:/dev/shm
       - ./rover.tail9d0237.ts.net.crt:/rover.tail9d0237.ts.net.crt
@@ -56,8 +58,12 @@ services:
       - ./rover.tail9d0237.ts.net.key:/cert.key
       - /tmp:/app/shared
       - ./server/audios:/app/audios
+      # Piper TTS models (place Chinese .onnx/.json files here)
+      - ./tts:/app/tts
       # Telemetry DB on host so it persists across power cycles
       - ./data:/app/data
+      # Same as mediamtx: dmix so TTS and voice chat share the USB speaker
+      - ./alsa/asound.conf:/etc/asound.conf:ro
     # Give the container permission to touch the hardware
     devices:
       - /dev/vchiq:/dev/vchiq
@@ -82,9 +88,17 @@ services:
     environment:
       BLINKA_FORCEBOARD: "RASPBERRY_PI_3B"
       BLINKA_FORCECHIP: "BCM2XXX"
-      # ALSA device for TTS (espeak → aplay). With USB speaker, use plughw:1,0 or plughw:2,0.
-      # Run "docker exec control_server aplay -l" to see card numbers; set to the USB speaker card.
-      TTS_ALSA_DEVICE: "plughw:1,0"
+      # Use ALSA "default" so playback goes through dmix (see ./alsa/asound.conf + mediamtx mount).
+      TTS_ALSA_DEVICE: "default"
+      # Mandarin TTS engine preference: auto (edge->piper->espeak), edge, piper, or espeak
+      TTS_ENGINE: "auto"
+      # Edge TTS Mandarin neural voice (best quality; requires internet)
+      EDGE_TTS_VOICE: "zh-CN-XiaoxiaoNeural"
+      EDGE_TTS_RATE: "+0%"
+      EDGE_TTS_VOLUME: "-35%"
+      # Piper settings (override in .env if needed)
+      PIPER_MODEL_PATH: "/app/tts/zh_CN-huayan-medium.onnx"
+      PIPER_SAMPLE_RATE: "22050"
     logging:
       driver: "json-file"
       options:

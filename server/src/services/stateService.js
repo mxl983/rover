@@ -4,6 +4,7 @@ import {
   getCpuLoad,
   getBatteryPercentage,
 } from "../utils/sysUtils.js";
+import { getOdometryCalibrationSnapshot } from "../constants/roverOdometry.js";
 
 // Charging detection: battery % goes up >1% in a few seconds = charging; drops >1% = not charging.
 // All logic is backend-only; frontend only displays isCharging from health.
@@ -101,6 +102,7 @@ class StateService {
         throttle: this.throttle,
         laserOn: this.laserOn,
         quietMode: this.quietMode,
+        odometry: getOdometryCalibrationSnapshot(this.distance),
       };
     } catch (e) {
       console.log(

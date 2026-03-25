@@ -5,7 +5,7 @@ import {
   AUDIO_TALK_HOST,
 } from "../constants";
 
-export const VideoStream = ({ dockingData: _dockingData }) => {
+export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const pcRef = useRef(null);
@@ -18,6 +18,9 @@ export const VideoStream = ({ dockingData: _dockingData }) => {
   const [roverMicEnabled, setRoverMicEnabled] = useState(false);
   const [dashMicEnabled, setDashMicEnabled] = useState(false);
 
+  useEffect(() => {
+    onVideoReadyChange?.(!isLoading);
+  }, [isLoading, onVideoReadyChange]);
 
   const cleanup = (type) => {
     if (type === "video") {

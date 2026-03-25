@@ -9,6 +9,7 @@ RUN install_packages \
     i2c-tools \
     libcamera-apps-lite \
     espeak-ng \
+    mpg123 \
     alsa-utils \
     uhubctl \
     wireless-tools \
@@ -22,6 +23,13 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     adafruit-circuitpython-servokit \
     adafruit-circuitpython-pca9685 \
     rpi-lgpio
+
+# Piper is not available as an apt package on some Raspberry Pi Debian mirrors.
+# Try Python package install, but do not fail image build if unavailable.
+RUN pip3 install --no-cache-dir --break-system-packages piper-tts || true
+
+# High quality cloud TTS (Mandarin neural voices)
+RUN pip3 install --no-cache-dir --break-system-packages edge-tts
 
 # Ensure board_imports.json exists next to board.py (some installs omit package data)
 COPY server/driver/ensure_board_imports.py /tmp/ensure_board_imports.py
