@@ -18,6 +18,10 @@ export const DualJoystickControls = ({
   laserOn,
   onHeadlightToggle,
   headlightOn,
+  onVoiceStart,
+  onVoiceStop,
+  voiceSupported,
+  voiceListening,
   children,
 }) => {
   const leftZoneRef = useRef(null);
@@ -357,6 +361,12 @@ export const DualJoystickControls = ({
           left: auto;
           right: -8px;
         }
+        .gimbal-bottom-center {
+          top: auto;
+          bottom: -8px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
 
         .center-slot {
           flex: 1;
@@ -369,6 +379,35 @@ export const DualJoystickControls = ({
         }
         .center-slot > * {
           pointer-events: auto;
+        }
+        .voice-ptt {
+          width: 58px;
+          height: 24px;
+          border-radius: 20px;
+          border: 1.5px solid #ff8a00;
+          background: linear-gradient(135deg, rgba(255,138,0,0.22), rgba(255,62,116,0.22));
+          color: #ffd180;
+          font-size: 9px;
+          font-weight: 800;
+          cursor: pointer;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: none;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 0, 0.35);
+        }
+        .voice-ptt-below-gimbal {
+          position: absolute;
+          z-index: 10002;
+        }
+        .voice-ptt.listening {
+          border-color: #22c55e;
+          color: #b9ffc2;
+          background: linear-gradient(135deg, rgba(34,197,94,0.36), rgba(0,242,255,0.24));
+          box-shadow: 0 0 14px rgba(34, 197, 94, 0.55);
+        }
+        .voice-ptt:active {
+          transform: translateX(-50%) scale(0.94);
         }
       `}</style>
 
@@ -503,5 +542,9 @@ DualJoystickControls.propTypes = {
   laserOn: PropTypes.bool,
   onHeadlightToggle: PropTypes.func,
   headlightOn: PropTypes.bool,
+  onVoiceStart: PropTypes.func,
+  onVoiceStop: PropTypes.func,
+  voiceSupported: PropTypes.bool,
+  voiceListening: PropTypes.bool,
   children: PropTypes.node,
 };

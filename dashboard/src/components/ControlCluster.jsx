@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 
 const CONTROL_CONFIG = [
   { key: "w", label: "W", grid: 2 },
+  { key: "v", label: "🎤", grid: 3, type: "action", hint: "PTT" },
   { key: "a", label: "A", grid: 5 },
   { key: "s", label: "S", grid: 6 },
   { key: "d", label: "D", grid: 7 },
@@ -20,11 +21,15 @@ export const ControlCluster = ({
   onDrive,
   onLightToggle,
   onLaserToggle,
+  onVoiceStart,
+  onVoiceStop,
   onDockingToggle,
   onCapture,
   onReset,
   usbPower,
   laserOn,
+  voiceSupported,
+  voiceListening,
   isDockingMode,
   isCapturing: _isCapturing,
 }) => {
@@ -37,7 +42,14 @@ export const ControlCluster = ({
       if (!conf) return;
 
       // Handle Action Buttons (Toggles/Captures)
-      if (isDown && conf.type === "action") {
+      if (conf.type === "action") {
+        if (key === "v") {
+          if (!voiceSupported) return;
+          if (isDown) onVoiceStart?.();
+          else onVoiceStop?.();
+          return;
+        }
+        if (!isDown) return;
         if (key === "f") onLightToggle();
         if (key === "l") onLaserToggle?.();
         if (key === "g") onDockingToggle(!isDockingMode);
@@ -68,9 +80,12 @@ export const ControlCluster = ({
       onDrive,
       onLightToggle,
       onLaserToggle,
+      onVoiceStart,
+      onVoiceStop,
       onDockingToggle,
       onCapture,
       onReset,
+      voiceSupported,
       isDockingMode,
     ],
   );
@@ -142,6 +157,7 @@ export const ControlCluster = ({
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
         .dock-on { background: #00ff41 !important; color: #000; border-color: #00ff41; }
+        .voice-on { background: #22c55e !important; color: #000; border-color: #22c55e; }
         .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
 
@@ -155,6 +171,7 @@ export const ControlCluster = ({
             className={`btn ${activeKeys.has(conf.key) ? "active" : ""} 
               ${conf.key === "f" && usbPower === "on" ? "light-on" : ""}
               ${conf.key === "l" && laserOn ? "laser-on" : ""}
+              ${conf.key === "v" && voiceListening ? "voice-on" : ""}
               ${conf.key === "g" && isDockingMode ? "dock-on" : ""}`}
             // Mouse Handlers
             onMouseDown={() => updateAction(conf.key, true)}

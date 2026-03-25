@@ -25,6 +25,9 @@ class DriverService {
     this.telemetryShell = null;
     this.currentData = { voltage: 0, distance: 0 };
     this.broadcast = () => {};
+    /** @type {((n: number) => void) | null} */
+    this._distanceFreshResolve = null;
+    this._distanceFreshTimer = null;
   }
 
   setBroadcast(fn) {
@@ -116,6 +119,15 @@ class DriverService {
         if (data.type === "telemetry") {
           stateService.currentVoltage = data.voltage;
           stateService.distance = data.distance || 0;
+          if (this._distanceFreshResolve) {
+            if (this._distanceFreshTimer) {
+              clearTimeout(this._distanceFreshTimer);
+              this._distanceFreshTimer = null;
+            }
+            const resolve = this._distanceFreshResolve;
+            this._distanceFreshResolve = null;
+            resolve(Number(stateService.distance) || 0);
+          }
         }
       } catch (e) {
         console.error("Voltage Parse Error", e);

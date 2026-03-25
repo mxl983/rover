@@ -20,10 +20,12 @@ import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
+import { AssistantPanel } from "./components/AssistantPanel";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
+import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
@@ -275,12 +277,100 @@ export default function App() {
     await sendControlNow({ command: "toggle_laser" });
   };
 
+  const runAssistantAction = async (action) => {
+    if (!action || typeof action !== "object") return;
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    if (action.type === "sequence" && Array.isArray(action.actions)) {
+      const steps = action.actions.slice(0, 10);
+      for (let i = 0; i < steps.length; i += 1) {
+        // Execute in-order for compound command reliability.
+        // eslint-disable-next-line no-await-in-loop
+        await runAssistantAction(steps[i]);
+        if (i < steps.length - 1) {
+          // Brief full stop between stages so timed segments do not blend into a curve.
+          // eslint-disable-next-line no-await-in-loop
+          await sendControlNow({ drive: { x: 0, y: 0 } });
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(120);
+        }
+      }
+      return;
+    }
+
+    if (action.type === "control") {
+      const payload = action.payload;
+      if (!payload) return;
+      await sendControlNow(payload);
+      if (
+        action.durationMs &&
+        payload.drive &&
+        !payload.command
+      ) {
+        await sleep(action.durationMs);
+        await sendControlNow({ drive: { x: 0, y: 0 } });
+      }
+      return;
+    }
+    if (action.type === "usb_power" && (action.action === "on" || action.action === "off")) {
+      await toggleLight(action.action);
+      return;
+    }
+    if (action.type === "camera") {
+      if (action.action === "capture") {
+        await handleCapture();
+        return;
+      }
+      if (action.action === "nightvision" && typeof action.active === "boolean") {
+        await handleNVToggle(action.active);
+        return;
+      }
+      if (action.action === "focus" && action.mode) {
+        await handleFocusChange(action.mode);
+        return;
+      }
+      if (action.action === "resolution" && action.mode) {
+        await handleResChange(action.mode);
+        return;
+      }
+      return;
+    }
+    if (action.type === "quiet_mode" && typeof action.enabled === "boolean") {
+      await setQuietMode(action.enabled);
+    }
+  };
+
+  const {
+    isSupported: voiceSupported,
+    isListening: voiceListening,
+    isLiveMode: voiceLiveMode,
+    isThinking: voiceThinking,
+    lastTranscript,
+    assistantReply,
+    voiceError,
+    startListening: startVoice,
+    stopListening: stopVoice,
+    setLiveMode: setVoiceLiveMode,
+    sendText: sendVoiceText,
+  } = useVoiceAssistant({ onAction: runAssistantAction });
+
   return (
     <div
       className={`viewport${isPointerLocked ? " viewport-mouse-look" : ""}`}
       ref={viewportRef}
     >
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
+      <AssistantPanel
+        voiceSupported={voiceSupported}
+        isListening={voiceListening}
+        isLiveMode={voiceLiveMode}
+        isThinking={voiceThinking}
+        transcript={lastTranscript}
+        reply={assistantReply}
+        error={voiceError}
+        onSendText={sendVoiceText}
+        onSetLiveMode={setVoiceLiveMode}
+      />
 
       {!isAuthenticated && (
         <LoginOverlay onLoginSuccess={handleLoginSuccess} />
@@ -337,6 +427,10 @@ export default function App() {
             onTurnRight={() => handleQuickTurn("R")}
             onLaserToggle={handleLaserToggle}
             laserOn={stats.laserOn}
+            onVoiceStart={startVoice}
+            onVoiceStop={stopVoice}
+            voiceSupported={voiceSupported}
+            voiceListening={voiceListening}
             onToggleLight={toggleLight}
             onCapture={handleCapture}
             isCapturing={isCapturing}
@@ -419,6 +513,10 @@ function HudFooter({
   onTurnRight,
   onLaserToggle,
   laserOn,
+  onVoiceStart,
+  onVoiceStop,
+  voiceSupported,
+  voiceListening,
   onToggleLight,
   onCapture,
   isCapturing,
@@ -450,6 +548,10 @@ function HudFooter({
           onTurnRight={onTurnRight}
           onLaserToggle={onLaserToggle}
           laserOn={laserOn}
+          onVoiceStart={onVoiceStart}
+          onVoiceStop={onVoiceStop}
+          voiceSupported={voiceSupported}
+          voiceListening={voiceListening}
           onHeadlightToggle={() => {
             const nextState = stats.usbPower === "on" ? "off" : "on";
             onToggleLight(nextState);
@@ -489,6 +591,10 @@ function HudFooter({
                 onDrive={onDrive}
                 usbPower={stats.usbPower}
                 laserOn={laserOn}
+                onVoiceStart={onVoiceStart}
+                onVoiceStop={onVoiceStop}
+                voiceSupported={voiceSupported}
+                voiceListening={voiceListening}
                 onLightToggle={() => {
                   const nextState =
                     stats.usbPower === "on" ? "off" : "on";
@@ -510,6 +616,10 @@ function HudFooter({
                 onTurnRight={onTurnRight}
                 onLaserToggle={onLaserToggle}
                 laserOn={laserOn}
+                onVoiceStart={onVoiceStart}
+                onVoiceStop={onVoiceStop}
+                voiceSupported={voiceSupported}
+                voiceListening={voiceListening}
                 onHeadlightToggle={() => {
                   const nextState = stats.usbPower === "on" ? "off" : "on";
                   onToggleLight(nextState);
@@ -523,3 +633,4 @@ function HudFooter({
     </div>
   );
 }
+

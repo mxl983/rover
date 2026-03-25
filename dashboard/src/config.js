@@ -21,6 +21,13 @@ export const PI_CONTROL_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/control/dri
 export const PI_DOCKING_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/control/docking`;
 export const PI_SYSTEM_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/system`;
 export const PI_CAMERA_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera`;
+export const PI_VOICE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/voice/interpret`;
+/** Web Speech API BCP-47 tag. Set VITE_VOICE_RECOGNITION_LANG=en-US for English questions; default follows browser (zh→zh-CN). */
+export const VOICE_RECOGNITION_LANG =
+  import.meta.env.VITE_VOICE_RECOGNITION_LANG ||
+  (typeof navigator !== "undefined" && /^zh/i.test(navigator.language || "")
+    ? "zh-CN"
+    : "en-US");
 export const PI_WEBSOCKET = `wss://${PI_SERVER_IP}:3000`;
 
 export const PI_HI_RES_CAPTURE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera/capture`;

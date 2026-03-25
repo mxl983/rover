@@ -13,6 +13,7 @@ import { stateService } from "./services/stateService.js";
 import cameraRoutes from "./routes/camera.js";
 import systemRoutes from "./routes/system.js";
 import controlRoutes, { isValidDrivePayload } from "./routes/control.js";
+import voiceRoutes from "./routes/voice.js";
 import { speak } from "./utils/sysUtils.js";
 import {
   initTelemetry,
@@ -108,6 +109,7 @@ app.use(cors(corsOptions));
 app.use("/api/camera", cameraRoutes);
 app.use("/api/system", systemRoutes);
 app.use("/api/control", controlRoutes);
+app.use("/api/voice", voiceRoutes);
 app.use("/photos", express.static(path.join(__dirname, "..", "photos")));
 app.options(/(.*)/, cors(corsOptions));
 
@@ -162,7 +164,9 @@ setInterval(() => {
     !stateService.isShuttingDown
   ) {
     idleWarningSpoken = true;
-    if (!stateService.quietMode) speak("If you don't use me in the next 60 seconds I will go to sleep to save power.");
+    if (!stateService.quietMode) {
+      speak("六十秒后若无操作，我将进入休眠以节省电量。", { language: "zh" });
+    }
   }
   if (
     timeSinceStartup > GRACE_PERIOD_MS &&
@@ -219,7 +223,10 @@ wss.on("connection", (ws, request) => {
     userAgent,
   });
   const platform = getPlatformHint(userAgent);
-  if (!stateService.quietMode) speak(platform ? `Dashboard connected from ${platform}` : "Dashboard connected");
+  if (!stateService.quietMode) {
+    const text = platform ? `控制面板已连接，设备是${platform}。` : "控制面板已连接。";
+    speak(text, { language: "zh" });
+  }
 
   ws.on("message", (message) => {
     try {
@@ -280,7 +287,7 @@ server.listen(port, host, () => {
   if (health && Object.keys(health).length) {
     recordTelemetry(health, "power_on");
   }
-  if (!stateService.quietMode) speak("System online");
+  if (!stateService.quietMode) speak("系统已上线。", { language: "zh" });
 });
 
 async function handleIdleShutdown() {
