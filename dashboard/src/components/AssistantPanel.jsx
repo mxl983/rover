@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import { Lightbulb } from "lucide-react";
 
 export function AssistantPanel({
+  videoStreamReady,
   voiceSupported,
   isListening,
   isLiveMode,
@@ -215,24 +217,22 @@ export function AssistantPanel({
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-width: 64px;
-          min-height: 34px;
-          padding: 6px 10px !important;
-          font-size: 12px !important;
-          font-weight: 700;
+          width: 42px;
+          height: 42px;
+          min-width: 42px;
+          min-height: 42px;
+          padding: 0 !important;
           letter-spacing: normal !important;
-          text-transform: none;
-          line-height: 1;
-          white-space: nowrap;
         }
       `}</style>
 
-      {!open && (
+      {!open && videoStreamReady && (
         <button
           type="button"
           className="glass-card assistant-fab"
           onClick={() => setOpen(true)}
           aria-label="Open assistant panel"
+          title="Assistant"
           style={{
             position: "fixed",
             right: "max(14px, env(safe-area-inset-right))",
@@ -244,7 +244,11 @@ export function AssistantPanel({
             animation: "assistant-fab-pulse 1.8s ease-out infinite",
           }}
         >
-          AGENT
+          <Lightbulb
+            size={22}
+            strokeWidth={1.75}
+            aria-hidden
+          />
         </button>
       )}
 
@@ -455,6 +459,7 @@ export function AssistantPanel({
 }
 
 AssistantPanel.propTypes = {
+  videoStreamReady: PropTypes.bool,
   voiceSupported: PropTypes.bool,
   isListening: PropTypes.bool,
   isLiveMode: PropTypes.bool,

@@ -47,6 +47,7 @@ export default function App() {
   const [, setSystemLoading] = useState(false);
   const [, setCameraLoading] = useState(false);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const [videoStreamReady, setVideoStreamReady] = useState(false);
 
   const isMobile = useIsMobile();
   const isFullscreen = useFullscreen();
@@ -361,6 +362,7 @@ export default function App() {
     >
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
       <AssistantPanel
+        videoStreamReady={videoStreamReady}
         voiceSupported={voiceSupported}
         isListening={voiceListening}
         isLiveMode={voiceLiveMode}
@@ -376,7 +378,10 @@ export default function App() {
         <LoginOverlay onLoginSuccess={handleLoginSuccess} />
       )}
 
-      <VideoStream dockingData={stats.docking} />
+      <VideoStream
+        dockingData={stats.docking}
+        onVideoReadyChange={setVideoStreamReady}
+      />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
       {isAuthenticated && isMobile && (
