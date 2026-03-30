@@ -12,7 +12,7 @@ const mqttOptions = {
   rejectUnauthorized: config.mqtt.rejectUnauthorized,
 };
 
-class MqttService {
+export class MqttService {
   constructor() {
     this.client = null;
     this.isConnected = false;

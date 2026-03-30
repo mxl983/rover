@@ -9,5 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.js"],
     include: ["src/**/*.test.{js,jsx}"],
+    env: {
+      VITE_PI_SERVER_IP: "test.rover.local",
+      VITE_MQTT_HOST: "wss://mqtt.test/mqtt",
+    },
   },
 });

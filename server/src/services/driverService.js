@@ -19,7 +19,7 @@ const options = {
   },
 };
 
-class DriverService {
+export class DriverService {
   constructor() {
     this.motorShell = null;
     this.telemetryShell = null;

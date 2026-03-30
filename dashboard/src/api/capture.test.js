@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isAllowedCaptureUrl } from "./capture";
+import { getAllowedCaptureOrigin } from "../config.js";
 
 describe("isAllowedCaptureUrl", () => {
   it("returns false for empty or non-string", () => {
@@ -14,8 +15,8 @@ describe("isAllowedCaptureUrl", () => {
   });
 
   it("returns true for same origin URL", () => {
-    const base = "https://rover.tail9d0237.ts.net:3000";
-    expect(isAllowedCaptureUrl(`${base}/api/camera/capture/123.jpg`)).toBe(true);
-    expect(isAllowedCaptureUrl(`${base}/anything`)).toBe(true);
+    const origin = getAllowedCaptureOrigin();
+    expect(isAllowedCaptureUrl(`${origin}/photos/capture_1.jpg`)).toBe(true);
+    expect(isAllowedCaptureUrl(`${origin}/anything`)).toBe(true);
   });
 });

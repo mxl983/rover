@@ -61,6 +61,12 @@ const config = {
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
     timeoutMs: parseNumber(process.env.DEEPSEEK_TIMEOUT_MS, 12_000),
   },
+  camera: {
+    photosDir: process.env.CAMERA_PHOTOS_DIR || "/app/photos",
+    mediamtxPatchUrl:
+      process.env.MEDIAMTX_PATCH_URL ||
+      "http://127.0.0.1:9997/v3/config/paths/patch/cam",
+  },
 };
 
 export default config;
