@@ -28,7 +28,7 @@ router.post(
       );
       const photoUrl = `${req.protocol}://${req.get("host")}/photos/${fileName}`;
       success(res, { url: photoUrl, filename: fileName });
-      if (!stateService.quietMode) speak("High resolution photo captured.");
+      speak("High resolution photo captured.");
     } finally {
       exec("DOCKER_API_VERSION=1.44 docker start mediamtx", (err) => {
         if (err) logger.error({ err }, "Failed to restart MediaMTX");
@@ -91,7 +91,7 @@ router.post(
 
     await axios.patch(mediamtxPatchUrl(), settings);
     success(res, { message: `Focus set to ${mode}` });
-    if (!stateService.quietMode) speak(`Focus set to ${mode}.`);
+    speak(`Focus set to ${mode}.`);
   }),
 );
 
@@ -118,7 +118,7 @@ router.post(
 
     await axios.patch(mediamtxPatchUrl(), settings);
     success(res, { message: `Resolution changed to ${appliedMode}` });
-    if (!stateService.quietMode) speak(`Resolution set to ${appliedMode}.`);
+    speak(`Resolution set to ${appliedMode}.`);
   }),
 );
 

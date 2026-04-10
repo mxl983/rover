@@ -13,6 +13,7 @@ vi.mock("../utils/sysUtils.js", async (importOriginal) => {
 import { createHttpApp } from "../createHttpApp.js";
 import { interpretVoiceTranscript } from "../services/voiceAssistantService.js";
 import { stateService } from "../services/stateService.js";
+import { speak } from "../utils/sysUtils.js";
 
 describe("/api/voice", () => {
   beforeEach(() => {

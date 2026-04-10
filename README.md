@@ -13,7 +13,7 @@ A remotely operated rover built around a Raspberry Pi: live video and audio, low
 | **Camera** | **Night vision** (long exposure) toggle, **focus** modes, **resolution** presets up to high-res still **capture** (full sensor) with MediaMTX coordination. |
 | **Voice** | **Speech-to-text** assistant that talks to your backend; compound commands and confirmations (see `useVoiceAssistant` + server voice routes). |
 | **Status** | Live **HUD**: battery, charging inference, voltage, distance, CPU load/temp, Wi‑Fi signal, pan/tilt, throttle, laser state, odometry snapshot. |
-| **Power & ops** | **Quiet mode** (less TTS), **USB power** for peripherals, **docking** UI hooks, graceful **idle shutdown** to save power, manual **reboot/shutdown** signals to the host. |
+| **Power & ops** | **Quiet drive** (default: slow steady motors) vs **boost drive** (full speed); **USB power** for peripherals, **docking** UI hooks, graceful **idle shutdown** to save power, manual **reboot/shutdown** signals to the host. |
 | **Cloud link** | **MQTT** (e.g. HiveMQ) for operator auth, ESP heartbeat, remote wake/logging, and integration with auxiliary hardware. |
 | **Telemetry** | Server-side **SQLite** history for health samples and client connection events (retention configurable). |
 

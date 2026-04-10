@@ -55,7 +55,7 @@ class RoverDriver:
         self._servo_warned = False
         self._last_throttle = -1
         self.quick_turn_until = 0.0
-        self.quiet_mode = False  # When True, use slow speed to reduce noise
+        self.quiet_mode = True  # When True, slow steady drive; False = boost (full speed)
         self.quick_turn_dir = 0  # -1 = left, +1 = right
         try:
             self.kit = ServoKit(channels=16)

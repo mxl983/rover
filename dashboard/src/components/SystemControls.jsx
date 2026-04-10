@@ -11,8 +11,8 @@ import {
   Camera,
   Check,
   Aperture,
-  Volume2,
-  VolumeX,
+  Footprints,
+  Zap,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -150,13 +150,18 @@ export const SystemControls = ({
 
           <DropdownMenu.Separator style={styles.separator} />
 
-          {/* QUIET MODE */}
+          {/* Quiet (default) vs boost drive — does not affect speaker */}
           <DropdownMenu.Item
             style={styles.menuItem}
             onSelect={() => onQuietModeChange && onQuietModeChange(!quietMode)}
+            title={
+              quietMode
+                ? "Switch to boost: full motor speed"
+                : "Switch to quiet: slow, steady driving (default)"
+            }
           >
-            {quietMode ? <VolumeX size={14} /> : <Volume2 size={14} />}
-            <span>Quiet mode: {quietMode ? "ON" : "OFF"}</span>
+            {quietMode ? <Footprints size={14} /> : <Zap size={14} />}
+            <span>{quietMode ? "Quiet drive (steady)" : "Boost drive"}</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />

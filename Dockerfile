@@ -38,7 +38,10 @@ RUN python3 /tmp/ensure_board_imports.py
 WORKDIR /app
 
 COPY server/package*.json ./
-RUN npm install
+# Force native addons (e.g. better-sqlite3) to compile for this container arch.
+# This avoids loading a mismatched prebuilt binary (ELFCLASS64/ELFCLASS32).
+ENV npm_config_build_from_source=true
+RUN npm install && npm rebuild better-sqlite3 --build-from-source
 
 COPY server/ .
 

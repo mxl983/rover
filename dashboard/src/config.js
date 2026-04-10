@@ -28,9 +28,16 @@ export const VOICE_RECOGNITION_LANG =
   (typeof navigator !== "undefined" && /^zh/i.test(navigator.language || "")
     ? "zh-CN"
     : "en-US");
+/** Live mode can force a dedicated ASR language; default zh-CN for Chinese conversational use. */
+export const VOICE_RECOGNITION_LIVE_LANG =
+  import.meta.env.VITE_VOICE_RECOGNITION_LIVE_LANG || "zh-CN";
 export const PI_WEBSOCKET = `wss://${PI_SERVER_IP}:3000`;
 
 export const PI_HI_RES_CAPTURE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera/capture`;
+
+/** Set VITE_VOICE_DRIVE_DEBUG=true to log assistant actions and control payloads in the browser console. */
+export const VOICE_DRIVE_DEBUG =
+  import.meta.env.VITE_VOICE_DRIVE_DEBUG === "true";
 
 /** Allowed origin for capture URL (same host as API). Used to validate redirects. */
 export function getAllowedCaptureOrigin() {

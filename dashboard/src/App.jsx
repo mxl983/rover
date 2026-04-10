@@ -9,6 +9,7 @@ import {
   PI_DOCKING_ENDPOINT,
   PI_HI_RES_CAPTURE_ENDPOINT,
   CAMERA_SECRET,
+  VOICE_DRIVE_DEBUG,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
@@ -29,6 +30,27 @@ import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
+
+/** Set true to show the floating voice-assistant panel again. */
+const SHOW_ASSISTANT_AGENT_UI = false;
+
+/** Voice/LLM gimbal-only sequences (nod, shake): used to center cam before & after. */
+function isGimbalOnlyAssistantSequence(steps) {
+  return (
+    Array.isArray(steps) &&
+    steps.length > 0 &&
+    steps.every(
+      (s) =>
+        s?.type === "control" &&
+        s.payload &&
+        !s.payload.drive &&
+        !s.payload.command &&
+        s.payload.gimbal,
+    )
+  );
+}
+
+const GIMBAL_HOME_SETTLE_MS = 600;
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login, logout } = useRoverSession();
@@ -232,7 +254,7 @@ export default function App() {
     try {
       await apiPostJson(`${PI_SYSTEM_ENDPOINT}/quiet-mode`, { enabled });
     } catch (err) {
-      setActionError(err.message ?? "Quiet mode update failed");
+      setActionError(err.message ?? "Drive mode update failed");
     }
   };
 
@@ -280,21 +302,40 @@ export default function App() {
 
   const runAssistantAction = async (action) => {
     if (!action || typeof action !== "object") return;
+    if (VOICE_DRIVE_DEBUG) {
+      // eslint-disable-next-line no-console
+      console.debug("[voice→drive] assistant action", action);
+    }
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     if (action.type === "sequence" && Array.isArray(action.actions)) {
       const steps = action.actions.slice(0, 10);
+      const gimbalOnly = isGimbalOnlyAssistantSequence(steps);
+      if (gimbalOnly) {
+        await sendControlNow({ gimbal: { x: 0, y: 0 } });
+        await sleep(GIMBAL_HOME_SETTLE_MS);
+      }
       for (let i = 0; i < steps.length; i += 1) {
         // Execute in-order for compound command reliability.
         // eslint-disable-next-line no-await-in-loop
         await runAssistantAction(steps[i]);
         if (i < steps.length - 1) {
-          // Brief full stop between stages so timed segments do not blend into a curve.
-          // eslint-disable-next-line no-await-in-loop
-          await sendControlNow({ drive: { x: 0, y: 0 } });
-          // eslint-disable-next-line no-await-in-loop
-          await sleep(120);
+          if (gimbalOnly) {
+            // Gimbal gestures are hold-based; avoid injecting drive-stop and keep a gentler cadence.
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(220);
+          } else {
+            // Brief full stop between drive stages so timed segments do not blend into a curve.
+            // eslint-disable-next-line no-await-in-loop
+            await sendControlNow({ drive: { x: 0, y: 0 } });
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(120);
+          }
         }
+      }
+      if (gimbalOnly) {
+        await sendControlNow({ gimbal: { x: 0, y: 0 } });
+        await sleep(GIMBAL_HOME_SETTLE_MS);
       }
       return;
     }
@@ -302,14 +343,18 @@ export default function App() {
     if (action.type === "control") {
       const payload = action.payload;
       if (!payload) return;
+      if (VOICE_DRIVE_DEBUG) {
+        // eslint-disable-next-line no-console
+        console.debug("[voice→drive] sendControl payload", payload);
+      }
       await sendControlNow(payload);
-      if (
-        action.durationMs &&
-        payload.drive &&
-        !payload.command
-      ) {
-        await sleep(action.durationMs);
-        await sendControlNow({ drive: { x: 0, y: 0 } });
+      if (action.durationMs && !payload.command) {
+        if (payload.drive) {
+          await sleep(action.durationMs);
+          await sendControlNow({ drive: { x: 0, y: 0 } });
+        } else if (payload.gimbal) {
+          await sleep(action.durationMs);
+        }
       }
       return;
     }
@@ -361,18 +406,20 @@ export default function App() {
       ref={viewportRef}
     >
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
-      <AssistantPanel
-        videoStreamReady={videoStreamReady}
-        voiceSupported={voiceSupported}
-        isListening={voiceListening}
-        isLiveMode={voiceLiveMode}
-        isThinking={voiceThinking}
-        transcript={lastTranscript}
-        reply={assistantReply}
-        error={voiceError}
-        onSendText={sendVoiceText}
-        onSetLiveMode={setVoiceLiveMode}
-      />
+      {SHOW_ASSISTANT_AGENT_UI && (
+        <AssistantPanel
+          videoStreamReady={videoStreamReady}
+          voiceSupported={voiceSupported}
+          isListening={voiceListening}
+          isLiveMode={voiceLiveMode}
+          isThinking={voiceThinking}
+          transcript={lastTranscript}
+          reply={assistantReply}
+          error={voiceError}
+          onSendText={sendVoiceText}
+          onSetLiveMode={setVoiceLiveMode}
+        />
+      )}
 
       {!isAuthenticated && (
         <LoginOverlay onLoginSuccess={handleLoginSuccess} />

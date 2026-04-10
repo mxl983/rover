@@ -61,6 +61,18 @@ const config = {
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
     timeoutMs: parseNumber(process.env.DEEPSEEK_TIMEOUT_MS, 12_000),
   },
+  /** When true, log full DeepSeek request body and raw HTTP response (noisy). */
+  voiceLlmDebug: parseBoolean(process.env.VOICE_LLM_DEBUG, false),
+  /**
+   * Timed voice drive: map “前进 N 米” to duration from estimated floor speed (m/s).
+   * Tune VOICE_LINEAR_SPEED_MPS if real distance is short (lower speed) or long (raise speed).
+   */
+  voiceDrive: {
+    estimatedLinearSpeedMps: parseNumber(process.env.VOICE_LINEAR_SPEED_MPS, 0.2),
+    /** Timed analog in-place turn: deg/s (tune from a timed test turn). */
+    estimatedTurnDegPerSec: parseNumber(process.env.VOICE_TURN_DEG_PER_SEC, 85),
+    maxTimedDriveMs: parseNumber(process.env.VOICE_MAX_TIMED_DRIVE_MS, 15_000),
+  },
   camera: {
     photosDir: process.env.CAMERA_PHOTOS_DIR || "/app/photos",
     mediamtxPatchUrl:

@@ -37,8 +37,8 @@ class StateService {
     this.throttle = 0;
     /** KY-008 laser on GPIO17: true = on, false = off. */
     this.laserOn = false;
-    /** When true, rover uses slow speed and all TTS announcements are off. */
-    this.quietMode = false;
+    /** When true (default), rover uses slow steady speeds; false = boost (full speed). Unrelated to TTS. */
+    this.quietMode = true;
   }
 
   /** Charging detection: if battery % goes up >1% in a few seconds → charging; if it drops >1% → not charging. */

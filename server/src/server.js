@@ -104,9 +104,7 @@ setInterval(() => {
     !stateService.isShuttingDown
   ) {
     idleWarningSpoken = true;
-    if (!stateService.quietMode) {
-      speak("六十秒后若无操作，我将进入休眠以节省电量。", { language: "zh" });
-    }
+    speak("六十秒后若无操作，我将进入休眠以节省电量。", { language: "zh" });
   }
   if (
     timeSinceStartup > GRACE_PERIOD_MS &&
@@ -149,7 +147,7 @@ server.listen(port, host, () => {
   if (health && Object.keys(health).length) {
     recordTelemetry(health, "power_on");
   }
-  if (!stateService.quietMode) speak("系统已上线。", { language: "zh" });
+  speak("系统已上线。", { language: "zh" });
 });
 
 async function handleIdleShutdown() {

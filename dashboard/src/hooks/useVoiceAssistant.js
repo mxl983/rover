@@ -1,10 +1,20 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { apiPostJson } from "../api/client";
-import { PI_VOICE_ENDPOINT, VOICE_RECOGNITION_LANG } from "../config";
+import {
+  PI_VOICE_ENDPOINT,
+  VOICE_RECOGNITION_LANG,
+  VOICE_RECOGNITION_LIVE_LANG,
+} from "../config";
 
 function getRecognitionCtor() {
   if (typeof window === "undefined") return null;
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function applyRecognitionLang(recognition, isLiveMode) {
+  recognition.lang = isLiveMode
+    ? VOICE_RECOGNITION_LIVE_LANG || VOICE_RECOGNITION_LANG
+    : VOICE_RECOGNITION_LANG;
 }
 
 export function useVoiceAssistant({ onAction } = {}) {
@@ -93,12 +103,19 @@ export function useVoiceAssistant({ onAction } = {}) {
     [submitTranscript],
   );
 
+  const flushLiveTranscript = useCallback(() => {
+    const t = `${finalTextRef.current}${interimTextRef.current}`.trim();
+    finalTextRef.current = "";
+    interimTextRef.current = "";
+    if (t) void submitTranscript(t);
+  }, [submitTranscript]);
+
   const ensureRecognition = useCallback(() => {
     if (recognitionRef.current) return recognitionRef.current;
     const Ctor = getRecognitionCtor();
     if (!Ctor) return null;
     const r = new Ctor();
-    r.lang = VOICE_RECOGNITION_LANG;
+    applyRecognitionLang(r, liveModeRef.current);
     r.continuous = true;
     r.interimResults = true;
     r.maxAlternatives = 1;
@@ -118,16 +135,13 @@ export function useVoiceAssistant({ onAction } = {}) {
       if (finalChunk) finalTextRef.current += finalChunk;
       interimTextRef.current = interimChunk;
 
-      // Live chat: after user pauses, submit accumulated finals (debounced).
-      if (liveModeRef.current && hadFinal) {
+      // Live chat: after user pauses, submit accumulated speech (final + interim).
+      if (liveModeRef.current && (hadFinal || interimChunk)) {
         clearLiveSubmitTimer();
         liveSubmitTimerRef.current = setTimeout(() => {
           liveSubmitTimerRef.current = null;
-          const t = finalTextRef.current.trim();
-          finalTextRef.current = "";
-          interimTextRef.current = "";
-          if (t) void submitTranscript(t);
-        }, 520);
+          flushLiveTranscript();
+        }, 900);
       }
     };
 
@@ -147,11 +161,17 @@ export function useVoiceAssistant({ onAction } = {}) {
       if (shouldSubmitPtt && text) {
         void submitTranscript(text);
       }
+      // In live mode, browsers may end unexpectedly; flush buffered text once.
+      if (wasLive && text) {
+        clearLiveSubmitTimer();
+        void submitTranscript(text);
+      }
       // Continuous mode: Chrome often ends the session after silence; restart if still live.
       if (wasLive) {
         setTimeout(() => {
           if (!liveModeRef.current || !recognitionRef.current) return;
           try {
+            applyRecognitionLang(recognitionRef.current, true);
             recognitionRef.current.start();
             setIsListening(true);
           } catch {
@@ -163,7 +183,7 @@ export function useVoiceAssistant({ onAction } = {}) {
 
     recognitionRef.current = r;
     return r;
-  }, [submitTranscript]);
+  }, [flushLiveTranscript, submitTranscript]);
 
   const startListening = useCallback(() => {
     setVoiceError("");
@@ -180,6 +200,7 @@ export function useVoiceAssistant({ onAction } = {}) {
     resetBuffers();
     submitOnEndRef.current = true;
     try {
+      applyRecognitionLang(r, false);
       r.start();
       setIsListening(true);
     } catch {
@@ -208,6 +229,7 @@ export function useVoiceAssistant({ onAction } = {}) {
     const startOnce = () => {
       if (!liveModeRef.current) return;
       try {
+        applyRecognitionLang(r, true);
         r.start();
         setIsListening(true);
       } catch {
@@ -229,6 +251,7 @@ export function useVoiceAssistant({ onAction } = {}) {
       setTimeout(() => {
         if (!liveModeRef.current) return;
         try {
+          applyRecognitionLang(r, true);
           r.start();
           setIsListening(true);
         } catch {

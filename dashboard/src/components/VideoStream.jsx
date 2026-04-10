@@ -4,6 +4,7 @@ import {
   AUDIO_STREAM_HOST,
   AUDIO_TALK_HOST,
 } from "../constants";
+import { VideoLoadingPhysics } from "./VideoLoadingPhysics.jsx";
 
 export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) => {
   const videoRef = useRef(null);
@@ -201,16 +202,14 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
         </button>
       </div>
 
-      {/* LOADING — central dot jumping */}
       {isLoading && (
         <div style={loaderWrapper}>
-          <div className="loader-common" style={polygonLoaderStyle}>
-            <svg viewBox="0 0 100 100" className="loader-svg">
-              <circle cx="50" cy="50" r="8" fill="#00f2ff" className="loader-dot-jump" />
-            </svg>
-          </div>
-          <div className="glitch-text polygon-label" style={loaderTextStyle}>
-            SIGNAL LOST — RECONNECTING
+          <VideoLoadingPhysics />
+          <div style={loaderForeground}>
+            <div className="glitch-text polygon-label" style={loaderTextStyle}>
+              COSMIC PIT STOP IN PROGRESS
+            </div>
+            <div style={loaderSubStyle}>tuning antennas, dodging asteroids, and finding your rover feed...</div>
           </div>
         </div>
       )}
@@ -224,22 +223,6 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
       />
 
       <style>{`
-        .loader-common {
-          width: 72px;
-          height: 72px;
-          margin-bottom: 14px;
-        }
-        .loader-svg {
-          width: 100%;
-          height: 100%;
-        }
-        .loader-dot-jump {
-          animation: loader-dot-jump 0.6s ease-in-out infinite;
-        }
-        @keyframes loader-dot-jump {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-18px); }
-        }
         .polygon-label.glitch-text {
           animation: glitch 1s linear infinite;
           text-shadow: 2px 0 #ff0055, -2px 0 #00f2ff;
@@ -324,9 +307,20 @@ const loaderWrapper = {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  background: "#000",
+  background: "#030308",
   zIndex: 50,
   overflow: "hidden",
+};
+
+const loaderForeground = {
+  position: "relative",
+  zIndex: 2,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "none",
+  padding: "0 16px",
 };
 
 const loaderTextStyle = {
@@ -334,12 +328,17 @@ const loaderTextStyle = {
   fontSize: "14px",
   fontWeight: "bold",
   letterSpacing: "4px",
+  textAlign: "center",
 };
 
-const polygonLoaderStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+const loaderSubStyle = {
+  marginTop: "12px",
+  color: "rgba(255,255,255,0.45)",
+  fontSize: "11px",
+  letterSpacing: "0.08em",
+  textAlign: "center",
+  maxWidth: "280px",
+  lineHeight: 1.45,
 };
 
 const btnStyle = (active, color) => ({

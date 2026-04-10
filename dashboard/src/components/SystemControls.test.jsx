@@ -43,6 +43,6 @@ describe("SystemControls", () => {
     const trigger = document.querySelector("[aria-haspopup='menu']");
     expect(trigger).toBeTruthy();
     await user.click(trigger);
-    expect(document.body.textContent).toMatch(/Night|720|Focus|Quiet|Reboot|Shutdown/i);
+    expect(document.body.textContent).toMatch(/Night|720|Focus|Quiet|Boost|Reboot|Shutdown/i);
   });
 });

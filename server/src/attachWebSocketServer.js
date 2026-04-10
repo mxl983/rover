@@ -31,10 +31,8 @@ export function attachWebSocketServer(httpServer) {
       userAgent,
     });
     const platform = getPlatformHint(userAgent);
-    if (!stateService.quietMode) {
-      const text = platform ? `控制面板已连接，设备是${platform}。` : "控制面板已连接。";
-      speak(text, { language: "zh" });
-    }
+    const text = platform ? `控制面板已连接，设备是${platform}。` : "控制面板已连接。";
+    speak(text, { language: "zh" });
 
     ws.on("message", (message) => {
       try {

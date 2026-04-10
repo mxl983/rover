@@ -8,6 +8,124 @@ const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
 const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
 
+/** Same curve as the on-screen drive stick (forward/back eases lateral). */
+function applyDriveCurve(raw) {
+  const ax = raw.x;
+  const ay = raw.y;
+  const absY = Math.abs(ay);
+  const absX = Math.abs(ax);
+  if (absY >= 0.25 && absY >= absX) {
+    const forwardBackScale = 0.35;
+    return { x: ax * forwardBackScale, y: ay };
+  }
+  return { x: ax, y: ay };
+}
+
+function clamp1(v) {
+  return Math.max(-1, Math.min(1, v));
+}
+
+/** Radial dead zone; axes expected in range ~[-1, 1]. */
+function deadzone2d(x, y, dead) {
+  const m = Math.hypot(x, y);
+  if (m < dead) return { x: 0, y: 0 };
+  return { x, y };
+}
+
+const GAMEPAD_DEAD_ZONE = 0.14;
+const GIMBAL_LINEAR_SCALE = 0.58;
+const TRIGGER_HELD_THRESHOLD = 0.45;
+
+/** Standard mapping: LB 4, RB 5, LT 6, RT 7 (analog value 0–1 when supported). */
+function triggerHeld(button) {
+  if (!button) return false;
+  if (button.pressed) return true;
+  const v = typeof button.value === "number" ? button.value : 0;
+  return v >= TRIGGER_HELD_THRESHOLD;
+}
+
+function bumperHeld(button) {
+  return Boolean(button?.pressed);
+}
+
+function getFirstConnectedGamepad() {
+  const pads = typeof navigator !== "undefined" ? navigator.getGamepads?.() : null;
+  if (!pads) return null;
+  for (let i = 0; i < pads.length; i++) {
+    const g = pads[i];
+    if (g?.connected) return g;
+  }
+  return null;
+}
+
+function readGamepadSticks(gp) {
+  const a = gp.axes;
+  if (!a?.length) {
+    return { lx: 0, ly: 0, rx: 0, ry: 0 };
+  }
+  let lx = a[0] ?? 0;
+  let ly = a[1] ?? 0;
+  let rx = a[2] ?? 0;
+  let ry = a[3] ?? 0;
+  // Firefox / some mappings expose the right stick on axes 4–5 when 2–3 are triggers.
+  if (a.length >= 6 && (Math.abs(rx) < 0.02 && Math.abs(ry) < 0.02)) {
+    rx = a[4] ?? 0;
+    ry = a[5] ?? 0;
+  }
+  return { lx, ly, rx, ry };
+}
+
+function sticksPhysicallyCentered(gp) {
+  if (!gp) return true;
+  const { lx, ly, rx, ry } = readGamepadSticks(gp);
+  const left = deadzone2d(lx, ly, GAMEPAD_DEAD_ZONE);
+  const right = deadzone2d(rx, ry, GAMEPAD_DEAD_ZONE);
+  return Math.hypot(left.x, left.y) < 0.001 && Math.hypot(right.x, right.y) < 0.001;
+}
+
+/**
+ * Touch + first connected gamepad. Gamepad stick outside the dead zone overrides that axis pair.
+ * When ignoreGamepadRef is true (tab blur / safety), gamepad is ignored until both sticks are centered.
+ */
+function mergeTouchAndGamepad(touch, ignoreGamepadRef) {
+  const gp = getFirstConnectedGamepad();
+  if (ignoreGamepadRef.current) {
+    if (sticksPhysicallyCentered(gp)) {
+      ignoreGamepadRef.current = false;
+    }
+    return {
+      drive: { ...touch.drive },
+      gimbal: { ...touch.gimbal },
+    };
+  }
+  if (!gp) {
+    return {
+      drive: { ...touch.drive },
+      gimbal: { ...touch.gimbal },
+    };
+  }
+  const { lx, ly, rx, ry } = readGamepadSticks(gp);
+  const leftRaw = deadzone2d(lx, ly, GAMEPAD_DEAD_ZONE);
+  const rightRaw = deadzone2d(rx, ry, GAMEPAD_DEAD_ZONE);
+  const leftMag = Math.hypot(leftRaw.x, leftRaw.y);
+  const rightMag = Math.hypot(rightRaw.x, rightRaw.y);
+
+  let drive = { ...touch.drive };
+  if (leftMag > 0) {
+    drive = applyDriveCurve(leftRaw);
+  }
+
+  let gimbal = { ...touch.gimbal };
+  if (rightMag > 0) {
+    gimbal = {
+      x: clamp1(rightRaw.x * GIMBAL_LINEAR_SCALE),
+      y: clamp1(rightRaw.y * GIMBAL_LINEAR_SCALE),
+    };
+  }
+
+  return { drive, gimbal };
+}
+
 export const DualJoystickControls = ({
   onDrive,
   onReset,
@@ -29,17 +147,42 @@ export const DualJoystickControls = ({
   const managersRef = useRef({ drive: null, look: null });
 
   const onDriveRef = useRef(onDrive);
+  const touchAnalogRef = useRef({
+    drive: { x: 0, y: 0 },
+    gimbal: { x: 0, y: 0 },
+  });
   const analogState = useRef({
     drive: { x: 0, y: 0 },
     gimbal: { x: 0, y: 0 },
   });
+  const ignoreGamepadRef = useRef(false);
   const lastSentRef = useRef({ drive: null, gimbal: null });
   const DRIVE_CHANGE_THRESHOLD = 0.04;
   const gimbalRafRef = useRef(null);
+  const syncMergedRef = useRef(() => {});
+  const gamepadRafRef = useRef(null);
 
   useEffect(() => {
     onDriveRef.current = onDrive;
   }, [onDrive]);
+
+  const onResetRef = useRef(onReset);
+  const onLookDownRef = useRef(onLookDown);
+  const onLaserToggleRef = useRef(onLaserToggle);
+  const onHeadlightToggleRef = useRef(onHeadlightToggle);
+  useEffect(() => {
+    onResetRef.current = onReset;
+    onLookDownRef.current = onLookDown;
+    onLaserToggleRef.current = onLaserToggle;
+    onHeadlightToggleRef.current = onHeadlightToggle;
+  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle]);
+
+  const gamepadButtonsPrevRef = useRef({
+    lt: false,
+    rt: false,
+    lb: false,
+    rb: false,
+  });
 
   const driveStateChanged = (a, b) =>
     a === null ||
@@ -53,28 +196,43 @@ export const DualJoystickControls = ({
   };
 
   const sendDriveStopWithRetries = () => {
-    analogState.current.drive = { x: 0, y: 0 };
-    const gimbal = { ...analogState.current.gimbal };
-    sendState({ x: 0, y: 0 }, gimbal, true);
-    const retry = () => onDriveRef.current?.({ drive: { x: 0, y: 0 }, gimbal });
+    touchAnalogRef.current.drive = { x: 0, y: 0 };
+    const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+    analogState.current = merged;
+    sendState(merged.drive, merged.gimbal, true);
+    const retry = () => {
+      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+      analogState.current = m;
+      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
+    };
     setTimeout(retry, 45);
     setTimeout(retry, 110);
   };
 
   const sendGimbalStopWithRetries = () => {
-    analogState.current.gimbal = { x: 0, y: 0 };
-    const drive = { ...analogState.current.drive };
-    sendState(drive, { x: 0, y: 0 }, true);
-    const retry = () => onDriveRef.current?.({ drive, gimbal: { x: 0, y: 0 } });
+    touchAnalogRef.current.gimbal = { x: 0, y: 0 };
+    const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+    analogState.current = merged;
+    sendState(merged.drive, merged.gimbal, true);
+    const retry = () => {
+      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+      analogState.current = m;
+      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
+    };
     setTimeout(retry, 45);
     setTimeout(retry, 110);
   };
 
   const sendAllStopWithRetries = () => {
-    analogState.current.drive = { x: 0, y: 0 };
-    analogState.current.gimbal = { x: 0, y: 0 };
+    ignoreGamepadRef.current = true;
+    touchAnalogRef.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
+    analogState.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
     sendState({ x: 0, y: 0 }, { x: 0, y: 0 }, true);
-    const retry = () => onDriveRef.current?.({ drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } });
+    const retry = () => {
+      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+      analogState.current = m;
+      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
+    };
     setTimeout(retry, 45);
     setTimeout(retry, 110);
   };
@@ -93,17 +251,23 @@ export const DualJoystickControls = ({
     sendState(drive, gimbal);
   };
 
+  const syncMergedAndSend = (isStop = false) => {
+    const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
+    analogState.current = merged;
+    sendIfChanged(isStop);
+  };
+  syncMergedRef.current = syncMergedAndSend;
+
   const startGimbalRaf = () => {
     if (gimbalRafRef.current) return;
     const tick = () => {
-      const drive = { ...analogState.current.drive };
-      const gimbal = { ...analogState.current.gimbal };
+      syncMergedRef.current(false);
+      const gimbal = analogState.current.gimbal;
       const mag = Math.sqrt((gimbal.x ?? 0) ** 2 + (gimbal.y ?? 0) ** 2);
       if (mag < 0.02) {
         gimbalRafRef.current = null;
         return;
       }
-      sendState(drive, gimbal);
       gimbalRafRef.current = requestAnimationFrame(tick);
     };
     gimbalRafRef.current = requestAnimationFrame(tick);
@@ -159,32 +323,19 @@ export const DualJoystickControls = ({
     };
 
     // Gimbal: linear and less sensitive (scale down so small drag = proportional movement)
-    const GIMBAL_LINEAR_SCALE = 0.58;
     const toGimbalAnalog = (data) => {
       const raw = toAnalog(data);
       return {
-        x: Math.max(-1, Math.min(1, raw.x * GIMBAL_LINEAR_SCALE)),
-        y: Math.max(-1, Math.min(1, raw.y * GIMBAL_LINEAR_SCALE)),
+        x: clamp1(raw.x * GIMBAL_LINEAR_SCALE),
+        y: clamp1(raw.y * GIMBAL_LINEAR_SCALE),
       };
     };
 
-    // Wider forward/back capture: when mostly fwd/back, reduce lateral so straight line is easier
-    const toDriveAnalog = (data) => {
-      const raw = toAnalog(data);
-      const ax = raw.x;
-      const ay = raw.y;
-      const absY = Math.abs(ay);
-      const absX = Math.abs(ax);
-      if (absY >= 0.25 && absY >= absX) {
-        const forwardBackScale = 0.35;
-        return { x: ax * forwardBackScale, y: ay };
-      }
-      return raw;
-    };
+    const toDriveAnalog = (data) => applyDriveCurve(toAnalog(data));
 
     driveManager.on("move", (evt, data) => {
-      analogState.current.drive = toDriveAnalog(data);
-      sendIfChanged(false);
+      touchAnalogRef.current.drive = toDriveAnalog(data);
+      syncMergedRef.current(false);
     });
 
     driveManager.on("end", () => {
@@ -192,7 +343,7 @@ export const DualJoystickControls = ({
     });
 
     lookManager.on("move", (evt, data) => {
-      analogState.current.gimbal = toGimbalAnalog(data);
+      touchAnalogRef.current.gimbal = toGimbalAnalog(data);
       startGimbalRaf();
     });
 
@@ -223,6 +374,65 @@ export const DualJoystickControls = ({
       sendAllStopWithRetries();
       driveManager.destroy();
       lookManager.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.getGamepads) return undefined;
+
+    const pump = () => {
+      syncMergedRef.current(false);
+
+      const gp = getFirstConnectedGamepad();
+      const prev = gamepadButtonsPrevRef.current;
+      if (!gp) {
+        gamepadButtonsPrevRef.current = { lt: false, rt: false, lb: false, rb: false };
+      } else {
+        const lt = triggerHeld(gp.buttons?.[6]);
+        const rt = triggerHeld(gp.buttons?.[7]);
+        const lb = bumperHeld(gp.buttons?.[4]);
+        const rb = bumperHeld(gp.buttons?.[5]);
+        const allowActions = !ignoreGamepadRef.current;
+        if (allowActions) {
+          if (lt && !prev.lt) onResetRef.current?.();
+          if (rt && !prev.rt) onLookDownRef.current?.();
+          if (lb && !prev.lb) onLaserToggleRef.current?.();
+          if (rb && !prev.rb) onHeadlightToggleRef.current?.();
+        }
+        gamepadButtonsPrevRef.current = { lt, rt, lb, rb };
+      }
+
+      const pads = navigator.getGamepads();
+      let anyConnected = false;
+      for (let i = 0; i < pads.length; i++) {
+        if (pads[i]?.connected) {
+          anyConnected = true;
+          break;
+        }
+      }
+      if (anyConnected) {
+        gamepadRafRef.current = requestAnimationFrame(pump);
+      } else {
+        gamepadRafRef.current = null;
+      }
+    };
+
+    const kick = () => {
+      if (gamepadRafRef.current != null) return;
+      gamepadRafRef.current = requestAnimationFrame(pump);
+    };
+
+    window.addEventListener("gamepadconnected", kick);
+    window.addEventListener("gamepaddisconnected", kick);
+    kick();
+
+    return () => {
+      window.removeEventListener("gamepadconnected", kick);
+      window.removeEventListener("gamepaddisconnected", kick);
+      if (gamepadRafRef.current != null) {
+        cancelAnimationFrame(gamepadRafRef.current);
+        gamepadRafRef.current = null;
+      }
     };
   }, []);
 

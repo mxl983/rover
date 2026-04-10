@@ -21,7 +21,7 @@ router.post(
         recentContext,
         health: stateService.getHealth?.() ?? null,
       });
-      if (!stateService.quietMode && result.replyText) {
+      if (result.replyText) {
         const speakText = String(result.replyText).trim().slice(0, 180);
         if (speakText) {
           const hasCjk = /[\u3040-\u30ff\u4e00-\u9fff]/.test(speakText);
