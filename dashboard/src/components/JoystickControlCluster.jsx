@@ -578,14 +578,16 @@ export const DualJoystickControls = ({
           transform: translateX(-50%);
         }
 
+        /* Schematic sits bottom-center between sticks (compact HUD layout). */
         .center-slot {
           flex: 1;
           display: flex;
           flex-direction: column;
-          justify-content: center;
+          justify-content: flex-end;
           align-items: center;
           pointer-events: none;
           gap: 12px;
+          min-height: 0;
         }
         .center-slot > * {
           pointer-events: auto;

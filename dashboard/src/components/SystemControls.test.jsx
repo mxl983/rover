@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SystemControls } from "./SystemControls.jsx";
 
@@ -18,6 +18,8 @@ describe("SystemControls", () => {
         onResChange={vi.fn()}
         onFocusChange={vi.fn()}
         onAction={vi.fn()}
+        controlMode="keyboard"
+        onControlModeChange={vi.fn()}
       />,
     );
     expect(container.firstChild).toBeNull();
@@ -38,11 +40,15 @@ describe("SystemControls", () => {
         onResChange={vi.fn()}
         onFocusChange={vi.fn()}
         onAction={vi.fn()}
+        controlMode="keyboard"
+        onControlModeChange={vi.fn()}
       />,
     );
     const trigger = document.querySelector("[aria-haspopup='menu']");
     expect(trigger).toBeTruthy();
     await user.click(trigger);
-    expect(document.body.textContent).toMatch(/Night|720|Focus|Quiet|Boost|Reboot|Shutdown/i);
+    expect(document.body.textContent).toMatch(
+      /Stream|Night|720|Focus|Drive input|Keyboard|Joystick|Quiet|Boost|Reboot|Shutdown/i,
+    );
   });
 });

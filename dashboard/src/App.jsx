@@ -22,7 +22,7 @@ import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
-import { useIsMobile } from "./hooks/useIsMobile";
+import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
@@ -52,6 +52,19 @@ function isGimbalOnlyAssistantSequence(steps) {
 
 const GIMBAL_HOME_SETTLE_MS = 600;
 
+const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
+
+function readInitialControlMode() {
+  if (typeof window === "undefined") return "keyboard";
+  try {
+    const v = window.localStorage.getItem(CONTROL_MODE_STORAGE_KEY);
+    if (v === "keyboard" || v === "joystick") return v;
+  } catch {
+    /* ignore */
+  }
+  return getIsMobileSnapshot() ? "joystick" : "keyboard";
+}
+
 export default function App() {
   const { isAuthenticated, sessionCreds, login, logout } = useRoverSession();
   const { stats, isOnline: piOnline, sendControl } = usePiWebSocket();
@@ -65,6 +78,17 @@ export default function App() {
   const [resMode, setResMode] = useState("720p");
   const [focusMode, setFocusMode] = useState("far");
   const [compact, setCompact] = useState(true);
+  const [controlMode, setControlModeState] = useState(readInitialControlMode);
+
+  const setControlMode = (mode) => {
+    if (mode !== "keyboard" && mode !== "joystick") return;
+    setControlModeState(mode);
+    try {
+      window.localStorage.setItem(CONTROL_MODE_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  };
   const [actionError, setActionError] = useState(null);
   const [, setSystemLoading] = useState(false);
   const [, setCameraLoading] = useState(false);
@@ -120,6 +144,12 @@ export default function App() {
     },
     [],
   );
+
+  /** Avoid stuck drive/gimbal when swapping input surfaces. */
+  useEffect(() => {
+    if (!isAuthenticated || !piOnline) return;
+    void sendControlNow({ drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } });
+  }, [controlMode, isAuthenticated, piOnline]);
 
   const handleDriveUpdate = (payload) => {
     clearErrorIfAny();
@@ -463,11 +493,14 @@ export default function App() {
             onResChange={handleResChange}
             onAction={handleSystemAction}
             onFocusChange={handleFocusChange}
+            controlMode={controlMode}
+            onControlModeChange={setControlMode}
           />
 
           <HudFooter
             compact={compact}
             isMobile={isMobile}
+            controlMode={controlMode}
             stats={stats}
             piOnline={piOnline}
             isEspOnline={isEspOnline}
@@ -524,6 +557,8 @@ function HudHeader({
   onResChange,
   onAction,
   onFocusChange,
+  controlMode,
+  onControlModeChange,
 }) {
   return (
     <div className="hud-header">
@@ -544,6 +579,8 @@ function HudHeader({
           onAction={onAction}
           focusMode={focusMode}
           onFocusChange={onFocusChange}
+          controlMode={controlMode}
+          onControlModeChange={onControlModeChange}
         />
         <FullscreenButton />
       </div>
@@ -554,6 +591,7 @@ function HudHeader({
 function HudFooter({
   compact,
   isMobile,
+  controlMode,
   stats,
   piOnline,
   isEspOnline,
@@ -574,6 +612,25 @@ function HudFooter({
   isCapturing,
   onDockingToggle,
 }) {
+  const joystickProps = {
+    onDrive,
+    onReset: onResetCamera,
+    onLookDown,
+    onTurnLeft,
+    onTurnRight,
+    onLaserToggle,
+    laserOn,
+    onVoiceStart,
+    onVoiceStop,
+    voiceSupported,
+    voiceListening,
+    onHeadlightToggle: () => {
+      const nextState = stats.usbPower === "on" ? "off" : "on";
+      onToggleLight(nextState);
+    },
+    headlightOn: stats.usbPower === "on",
+  };
+
   const schematic = (
     <RoverSchematic
       pan={stats.pan}
@@ -587,34 +644,20 @@ function HudFooter({
     />
   );
 
+  /** Joystick mode always uses the compact HUD layout (schematic + stick placement). */
+  const layoutCompact = controlMode === "joystick" || compact;
+
   return (
     <div className="hud-footer">
-      {compact && !isMobile && schematic}
+      {layoutCompact && !isMobile && controlMode === "keyboard" && schematic}
 
-      {compact && isMobile && (
-        <DualJoystickControls
-          onDrive={onDrive}
-          onReset={onResetCamera}
-          onLookDown={onLookDown}
-          onTurnLeft={onTurnLeft}
-          onTurnRight={onTurnRight}
-          onLaserToggle={onLaserToggle}
-          laserOn={laserOn}
-          onVoiceStart={onVoiceStart}
-          onVoiceStop={onVoiceStop}
-          voiceSupported={voiceSupported}
-          voiceListening={voiceListening}
-          onHeadlightToggle={() => {
-            const nextState = stats.usbPower === "on" ? "off" : "on";
-            onToggleLight(nextState);
-          }}
-          headlightOn={stats.usbPower === "on"}
-        >
-          {schematic}
-        </DualJoystickControls>
+      {isMobile && controlMode === "joystick" && (
+        <DualJoystickControls {...joystickProps}>{schematic}</DualJoystickControls>
       )}
 
-      {!compact && (
+      {compact && isMobile && controlMode === "keyboard" && schematic}
+
+      {!layoutCompact && (
         <div className="drive-control-monitor glass-card">
           <div className="footer-metrics">
             <SubsystemItem
@@ -637,7 +680,7 @@ function HudFooter({
       <div className="footer-controls">
         {piOnline ? (
           <>
-            {!isMobile && (
+            {!isMobile && controlMode === "keyboard" && (
               <ControlCluster
                 onDockingToggle={onDockingToggle}
                 onDrive={onDrive}
@@ -659,24 +702,32 @@ function HudFooter({
                 onReset={onResetCamera}
               />
             )}
-            {isMobile && !compact && (
-              <DualJoystickControls
+            {!isMobile && controlMode === "joystick" && (
+              <DualJoystickControls {...joystickProps}>
+                {schematic}
+              </DualJoystickControls>
+            )}
+
+            {isMobile && controlMode === "keyboard" && (
+              <ControlCluster
+                onDockingToggle={onDockingToggle}
                 onDrive={onDrive}
-                onReset={onResetCamera}
-                onLookDown={onLookDown}
-                onTurnLeft={onTurnLeft}
-                onTurnRight={onTurnRight}
-                onLaserToggle={onLaserToggle}
+                usbPower={stats.usbPower}
                 laserOn={laserOn}
                 onVoiceStart={onVoiceStart}
                 onVoiceStop={onVoiceStop}
                 voiceSupported={voiceSupported}
                 voiceListening={voiceListening}
-                onHeadlightToggle={() => {
-                  const nextState = stats.usbPower === "on" ? "off" : "on";
+                onLightToggle={() => {
+                  const nextState =
+                    stats.usbPower === "on" ? "off" : "on";
                   onToggleLight(nextState);
                 }}
-                headlightOn={stats.usbPower === "on"}
+                onLaserToggle={onLaserToggle}
+                isDockingMode={stats.isDockingMode}
+                onCapture={onCapture}
+                isCapturing={isCapturing}
+                onReset={onResetCamera}
               />
             )}
           </>

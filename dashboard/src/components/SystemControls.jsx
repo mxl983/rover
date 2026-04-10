@@ -8,11 +8,13 @@ import {
   Settings,
   Focus,
   ChevronLeft,
-  Camera,
+  Video,
   Check,
   Aperture,
   Footprints,
   Zap,
+  Keyboard,
+  Gamepad2,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -27,6 +29,8 @@ export const SystemControls = ({
   onResChange,
   onFocusChange,
   onAction,
+  controlMode,
+  onControlModeChange,
 }) => {
   if (!isPowered) return null;
 
@@ -69,10 +73,9 @@ export const SystemControls = ({
 
           <DropdownMenu.Separator style={styles.separator} />
 
-          {/* VISION SUBMENU */}
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger style={styles.menuItem}>
-              <Camera size={14} /> <span>Vision</span>
+              <Video size={14} /> <span>Stream</span>
               <ChevronLeft
                 size={12}
                 style={{ marginLeft: "auto", opacity: 0.5 }}
@@ -163,6 +166,37 @@ export const SystemControls = ({
             {quietMode ? <Footprints size={14} /> : <Zap size={14} />}
             <span>{quietMode ? "Quiet drive (steady)" : "Boost drive"}</span>
           </DropdownMenu.Item>
+
+          <DropdownMenu.Separator style={styles.separator} />
+
+          <DropdownMenu.Label style={styles.menuLabel}>
+            Drive input
+          </DropdownMenu.Label>
+          <DropdownMenu.RadioGroup
+            value={controlMode}
+            onValueChange={onControlModeChange}
+          >
+            <DropdownMenu.RadioItem
+              style={styles.menuItem}
+              value="keyboard"
+            >
+              <Keyboard size={14} />
+              <span>Keyboard</span>
+              <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
+                <Check size={12} color="#00f2ff" />
+              </DropdownMenu.ItemIndicator>
+            </DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem
+              style={styles.menuItem}
+              value="joystick"
+            >
+              <Gamepad2 size={14} />
+              <span>Joystick</span>
+              <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
+                <Check size={12} color="#00f2ff" />
+              </DropdownMenu.ItemIndicator>
+            </DropdownMenu.RadioItem>
+          </DropdownMenu.RadioGroup>
 
           <DropdownMenu.Separator style={styles.separator} />
 

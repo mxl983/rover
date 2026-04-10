@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import PropTypes from "prop-types";
-import { Battery, Thermometer, Activity, Gauge } from "lucide-react";
+import { Battery, Thermometer, Activity } from "lucide-react";
 
 const TOUCH_TARGET_MIN = 44;
 const SIZE = 88;
@@ -22,6 +22,35 @@ const palette = {
 };
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+/** Horizontal rev strip: number of discrete dashes */
+const THROTTLE_SEGMENTS = 26;
+
+function lerpChannel(a, b, t) {
+  return Math.round(a + (b - a) * t);
+}
+
+/** Position t in [0,1]: left green → right red (via yellow). */
+function throttleDashColor(t) {
+  const u = clamp01(t);
+  const parseHex = (h) => {
+    const n = parseInt(h.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const toHex = (r, g, b) =>
+    "#" + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
+  const blend = (c1, c2, x) => {
+    const [r1, g1, b1] = parseHex(c1);
+    const [r2, g2, b2] = parseHex(c2);
+    return toHex(
+      lerpChannel(r1, r2, x),
+      lerpChannel(g1, g2, x),
+      lerpChannel(b1, b2, x),
+    );
+  };
+  if (u <= 0.5) return blend("#22c55e", "#ffd60a", u * 2);
+  return blend("#ffd60a", "#ff453a", (u - 0.5) * 2);
+}
 
 function bandColor(value, { good, warn }, invert = false) {
   if (value == null) return palette.grey;
@@ -94,34 +123,6 @@ export const RoverSchematic = ({
   );
 
   const throttleFrac = clamp01(throttlePct / 100);
-
-  // Rev bar: gradient only for 0..throttle% so segments appear as throttle increases (no full rainbow when short)
-  const throttleBarGradient = (() => {
-    if (isOffline || throttlePct <= 0) return palette.grey;
-    const pct = Math.min(100, throttlePct);
-    const hex = (r, g, b) => "#" + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
-    const lerp = (a, b, t) => a + (b - a) * t;
-    const parseHex = (h) => {
-      const n = parseInt(h.slice(1), 16);
-      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-    };
-    const blend = (c1, c2, t) => {
-      const [r1, g1, b1] = parseHex(c1);
-      const [r2, g2, b2] = parseHex(c2);
-      return hex(lerp(r1, r2, t), lerp(g1, g2, t), lerp(b1, b2, t));
-    };
-    const colorAt = (t) => {
-      if (t <= 35) return blend("#00f2ff", "#22c55e", t / 35);
-      if (t <= 65) return blend("#22c55e", "#ffd60a", (t - 35) / 30);
-      return blend("#ffd60a", "#ff453a", (t - 65) / 35);
-    };
-    const breakpoints = [0, 35, 65, 100].filter((b) => b <= pct);
-    const stops = breakpoints.map((b) => `${colorAt(b)} ${(b / pct) * 100}%`);
-    if (pct > 0 && (stops.length === 0 || breakpoints[breakpoints.length - 1] !== pct)) {
-      stops.push(`${colorAt(pct)} 100%`);
-    }
-    return `linear-gradient(to right, ${stops.join(", ")})`;
-  })();
 
   return (
     <div
@@ -322,30 +323,43 @@ export const RoverSchematic = ({
       </svg>
       </div>
 
-      {/* Throttle bar slot: fixed space so schematic never shifts */}
+      {/* Rev strip: dashes only (no track box); color left→right green→red */}
       <div
         style={{
           width: SIZE + 8,
-          height: 4,
-          borderRadius: 0,
-          background: "rgba(0,0,0,0.65)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          overflow: "hidden",
-          boxSizing: "border-box",
+          height: 6,
           opacity: throttlePct > 0 && !isOffline ? 1 : 0,
           transition: "opacity 0.12s ease-out",
+          display: "flex",
+          alignItems: "stretch",
+          gap: 2,
         }}
         aria-label={`Throttle ${Math.round(throttlePct)}%`}
       >
-        <div
-          style={{
-            width: `${throttleFrac * 100}%`,
-            height: "100%",
-            background: throttleBarGradient,
-            borderRadius: 0,
-            transition: "width 0.08s ease-out",
-          }}
-        />
+        {Array.from({ length: THROTTLE_SEGMENTS }, (_, i) => {
+          const active = i < throttleFrac * THROTTLE_SEGMENTS;
+          const t =
+            THROTTLE_SEGMENTS > 1 ? i / (THROTTLE_SEGMENTS - 1) : 0;
+          const fill = isOffline
+            ? palette.grey
+            : active
+              ? throttleDashColor(t)
+              : "rgba(255,255,255,0.12)";
+          return (
+            <div
+              key={i}
+              style={{
+                flex: "1 1 0",
+                minWidth: 0,
+                height: "100%",
+                borderRadius: 1,
+                background: fill,
+                opacity: active ? 1 : 0.55,
+                transition: "background 0.07s ease-out, opacity 0.07s ease-out",
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
