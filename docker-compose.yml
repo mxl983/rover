@@ -60,8 +60,6 @@ services:
       - ./server/audios:/app/audios
       # Piper TTS models (place Chinese .onnx/.json files here)
       - ./tts:/app/tts
-      # Telemetry DB on host so it persists across power cycles
-      - ./data:/app/data
       # Same as mediamtx: dmix so TTS and voice chat share the USB speaker
       - ./alsa/asound.conf:/etc/asound.conf:ro
     # Give the container permission to touch the hardware

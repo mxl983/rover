@@ -15,7 +15,7 @@ A remotely operated rover built around a Raspberry Pi: live video and audio, low
 | **Status** | Live **HUD**: battery, charging inference, voltage, distance, CPU load/temp, Wi‑Fi signal, pan/tilt, throttle, laser state, odometry snapshot. |
 | **Power & ops** | **Quiet drive** (default: slow steady motors) vs **boost drive** (full speed); **USB power** for peripherals, **docking** UI hooks, graceful **idle shutdown** to save power, manual **reboot/shutdown** signals to the host. |
 | **Cloud link** | **MQTT** (e.g. HiveMQ) for operator auth, ESP heartbeat, remote wake/logging, and integration with auxiliary hardware. |
-| **Telemetry** | Server-side **SQLite** history for health samples and client connection events (retention configurable). |
+| **Telemetry** | Relay-based telemetry ingest/query over HTTP (offloads local SQLite writes on the Pi). |
 
 ---
 

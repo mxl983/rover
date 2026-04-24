@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const CONTROL_CONFIG = [
   { key: "w", label: "W", grid: 2 },
   { key: "v", label: "🎤", grid: 3, type: "action", hint: "PTT" },
+  { key: "b", label: "📷", grid: 4, type: "action", hint: "BKP" },
   { key: "a", label: "A", grid: 5 },
   { key: "s", label: "S", grid: 6 },
   { key: "d", label: "D", grid: 7 },
@@ -12,7 +13,6 @@ const CONTROL_CONFIG = [
   { key: "arrowright", label: "▶", grid: 15, python: "ArrowRight", hint: "R" },
   { key: "f", label: "💡", grid: 16, type: "action", hint: "F" },
   { key: "l", label: "🔴", grid: 8, type: "action", hint: "LZR" },
-  { key: "g", label: "🎯", grid: 12, type: "action", hint: "G" },
   { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
   { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
 ];
@@ -23,14 +23,14 @@ export const ControlCluster = ({
   onLaserToggle,
   onVoiceStart,
   onVoiceStop,
-  onDockingToggle,
   onCapture,
   onReset,
   usbPower,
   laserOn,
   voiceSupported,
   voiceListening,
-  isDockingMode,
+  onToggleBackupView,
+  backupViewEnabled,
   isCapturing: _isCapturing,
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
@@ -52,9 +52,9 @@ export const ControlCluster = ({
         if (!isDown) return;
         if (key === "f") onLightToggle();
         if (key === "l") onLaserToggle?.();
-        if (key === "g") onDockingToggle(!isDockingMode);
         if (key === "c") onCapture();
         if (key === "r") onReset();
+        if (key === "b") onToggleBackupView?.();
         return;
       }
 
@@ -82,11 +82,10 @@ export const ControlCluster = ({
       onLaserToggle,
       onVoiceStart,
       onVoiceStop,
-      onDockingToggle,
       onCapture,
       onReset,
       voiceSupported,
-      isDockingMode,
+      onToggleBackupView,
     ],
   );
 
@@ -156,8 +155,8 @@ export const ControlCluster = ({
         .active { background: #00f2ff !important; color: #000 !important; }
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
-        .dock-on { background: #00ff41 !important; color: #000; border-color: #00ff41; }
         .voice-on { background: #22c55e !important; color: #000; border-color: #22c55e; }
+        .backup-on { background: #8b5cf6 !important; color: #fff; border-color: #8b5cf6; }
         .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
 
@@ -172,7 +171,7 @@ export const ControlCluster = ({
               ${conf.key === "f" && usbPower === "on" ? "light-on" : ""}
               ${conf.key === "l" && laserOn ? "laser-on" : ""}
               ${conf.key === "v" && voiceListening ? "voice-on" : ""}
-              ${conf.key === "g" && isDockingMode ? "dock-on" : ""}`}
+              ${conf.key === "b" && backupViewEnabled ? "backup-on" : ""}`}
             // Mouse Handlers
             onMouseDown={() => updateAction(conf.key, true)}
             onMouseUp={() => updateAction(conf.key, false)}

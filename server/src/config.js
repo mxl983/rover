@@ -51,9 +51,11 @@ const config = {
   },
   telemetry: {
     enabled: parseBoolean(process.env.TELEMETRY_ENABLED, true),
-    dbPath: process.env.TELEMETRY_DB_PATH || "/app/data/telemetry.db",
-    /** Keep data for this many days; older rows in telemetry and client_connections are deleted. Set TELEMETRY_RETENTION_DAYS to override. */
-    retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 7),
+    relayUrl:
+      process.env.TELEMETRY_RELAY_URL ||
+      "https://jjcloud.tail9d0237.ts.net:8787",
+    relayToken: process.env.RELAY_API_TOKEN || process.env.ROVER_API_TOKEN || "",
+    relayTimeoutMs: parseNumber(process.env.TELEMETRY_RELAY_TIMEOUT_MS, 3000),
   },
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY || "",

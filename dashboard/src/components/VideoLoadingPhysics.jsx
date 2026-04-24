@@ -42,8 +42,8 @@ function wheelContactYFromDepthZ(z, slabTopY, groundBand) {
  */
 const MOUNTAIN_BEHIND = [
   {
-    baseFrac: 0,
-    scroll: 0.16,
+    baseFrac: -0.08,
+    scroll: 0.08,
     hScale: 0.5,
     color: 0x0f141b,
     alpha: 1,
@@ -55,8 +55,8 @@ const MOUNTAIN_BEHIND = [
     ],
   },
   {
-    baseFrac: 0.04,
-    scroll: 0.26,
+    baseFrac: -0.03,
+    scroll: 0.14,
     hScale: 0.52,
     color: 0x111821,
     alpha: 1,
@@ -68,8 +68,8 @@ const MOUNTAIN_BEHIND = [
     ],
   },
   {
-    baseFrac: 0.085,
-    scroll: 0.36,
+    baseFrac: 0.02,
+    scroll: 0.2,
     hScale: 0.53,
     color: 0x141d27,
     alpha: 1,
@@ -81,8 +81,8 @@ const MOUNTAIN_BEHIND = [
     ],
   },
   {
-    baseFrac: 0.13,
-    scroll: 0.48,
+    baseFrac: 0.07,
+    scroll: 0.28,
     hScale: 0.54,
     color: 0x18222c,
     alpha: 1,
@@ -102,7 +102,7 @@ const MOUNTAIN_BEHIND = [
 const MOUNTAIN_MID = [
   {
     baseFrac: 0.38,
-    scroll: 0.56,
+    scroll: 0.4,
     hScale: 0.25,
     peakReachHMaxMul: 0.62,
     color: 0x1e2a34,
@@ -122,7 +122,7 @@ const MOUNTAIN_MID = [
   },
   {
     baseFrac: 0.44,
-    scroll: 0.48,
+    scroll: 0.34,
     hScale: 0.22,
     peakReachHMaxMul: 0.56,
     color: 0x243038,
@@ -149,32 +149,32 @@ const ROVER_GROUND_BASE_FRAC =
 const MOUNTAIN_NEAR = [
   {
     baseFrac: ROVER_GROUND_BASE_FRAC,
-    scroll: 0.8,
+    scroll: 1.02,
     hScale: 0.38,
     peakReachHMaxMul: 1.08,
     color: 0x5f7d93,
     alpha: 1,
     peaks: [
-      [0.03, 0.068, 0.42],
-      [0.16, 0.06, 0.47],
-      [0.29, 0.064, 0.44],
-      [0.71, 0.064, 0.44],
-      [0.84, 0.06, 0.47],
-      [0.97, 0.068, 0.42],
+      [0.03, 0.052, 0.42],
+      [0.16, 0.046, 0.47],
+      [0.29, 0.05, 0.44],
+      [0.71, 0.05, 0.44],
+      [0.84, 0.046, 0.47],
+      [0.97, 0.052, 0.42],
     ],
   },
   {
     baseFrac: ROVER_GROUND_BASE_FRAC + 0.035,
-    scroll: 0.72,
+    scroll: 0.9,
     hScale: 0.34,
     peakReachHMaxMul: 0.95,
     color: 0x6f8ea5,
     alpha: 1,
     peaks: [
-      [0.08, 0.072, 0.35],
-      [0.24, 0.064, 0.33],
-      [0.76, 0.064, 0.33],
-      [0.92, 0.072, 0.35],
+      [0.08, 0.055, 0.35],
+      [0.24, 0.05, 0.33],
+      [0.76, 0.05, 0.33],
+      [0.92, 0.055, 0.35],
     ],
   },
 ];
@@ -586,7 +586,7 @@ export function VideoLoadingPhysics() {
       });
 
       let scrollAccum = 0;
-      const scrollSpeed = 1.9;
+      const scrollSpeed = 2.65;
 
       const hMax = () => Math.max(44, Math.min(92, v.slabTopY * 0.28));
 
@@ -637,7 +637,7 @@ export function VideoLoadingPhysics() {
       syncMountainScroll();
 
       const syncGroundRivers = () => {
-        const s = wrapScroll(scrollAccum * 0.42, v.period);
+        const s = wrapScroll(scrollAccum * 0.5, v.period);
         riverA.x = -s;
         riverB.x = riverA.x + v.period;
       };

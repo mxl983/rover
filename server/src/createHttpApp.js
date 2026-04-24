@@ -47,11 +47,16 @@ export function createHttpApp(options = {}) {
     success(res, { status: "ok", uptime: process.uptime(), env: cfg.env });
   });
 
-  app.get("/api/telemetry", (req, res) => {
+  app.get("/api/telemetry", async (req, res) => {
     const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 100), 1000);
     const since = req.query.since || null;
-    const data = getTelemetryFn({ limit, since });
-    success(res, { telemetry: data });
+    try {
+      const data = await Promise.resolve(getTelemetryFn({ limit, since }));
+      success(res, { telemetry: data });
+    } catch (err) {
+      logger.warn({ err }, "Telemetry read failed");
+      error(res, "Telemetry unavailable", 502);
+    }
   });
 
   app.use((req, res) => {

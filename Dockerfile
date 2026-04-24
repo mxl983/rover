@@ -38,14 +38,11 @@ RUN python3 /tmp/ensure_board_imports.py
 WORKDIR /app
 
 COPY server/package*.json ./
-# Force native addons (e.g. better-sqlite3) to compile for this container arch.
-# This avoids loading a mismatched prebuilt binary (ELFCLASS64/ELFCLASS32).
-ENV npm_config_build_from_source=true
-RUN npm install && npm rebuild better-sqlite3 --build-from-source
+RUN npm install
 
 COPY server/ .
 
-# Ensure photos and telemetry data directories
-RUN mkdir -p /app/photos /app/data && chmod 777 /app/photos /app/data
+# Ensure photos directory
+RUN mkdir -p /app/photos && chmod 777 /app/photos
 
 CMD ["npm", "start"]

@@ -14,7 +14,7 @@ Production-grade React dashboard for controlling the Mango Rover (Pi server, ESP
 ```bash
 cd dashboard
 cp .env.example .env
-# Edit .env with your VITE_PI_SERVER_IP and VITE_MQTT_HOST (and optionally VITE_CAMERA_SECRET)
+# Edit .env with your VITE_PI_SERVER_IP, VITE_MQTT_HOST, and relay URL (optionally VITE_CAMERA_SECRET)
 npm install
 npm run dev
 ```
@@ -39,6 +39,8 @@ All client-exposed config uses the `VITE_` prefix (Vite requirement).
 |----------|-------------|---------|
 | `VITE_PI_SERVER_IP` | Pi server host (no protocol) | `rover.tail9d0237.ts.net` |
 | `VITE_MQTT_HOST` | MQTT broker WSS URL | HiveMQ Cloud URL in repo |
+| `VITE_RELAY_BASE_URL` | Relay base URL (backup stream + telemetry history) | `https://jjcloud.tail9d0237.ts.net` |
+| `VITE_BACKUP_STREAM_URL` | Optional direct backup stream endpoint override | `https://jjcloud.tail9d0237.ts.net:8787/api/cams/backup/stream` |
 | `VITE_CAMERA_SECRET` | Optional camera API secret (must match server) | (none) |
 
 - Copy `.env.example` to `.env` and set values. Do not commit `.env`.

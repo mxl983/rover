@@ -3,17 +3,22 @@ import { PI_WEBSOCKET } from "../config";
 
 const PING_INTERVAL_MS = 3000;
 const HEARTBEAT_STALE_MS = 5000;
+const RECONNECT_BASE_MS = 600;
+const RECONNECT_MAX_MS = 8000;
 
 export function usePiWebSocket() {
   const socketRef = useRef(null);
   const [stats, setStats] = useState({});
   const [isOnline, setIsOnline] = useState(false);
+  const [hasEverConnected, setHasEverConnected] = useState(false);
   const lastPingTime = useRef(0);
   const lastHeartBeat = useRef(0);
+  const reconnectAttemptRef = useRef(0);
 
   useEffect(() => {
     let socket;
-    let reconnectTimeout;
+    let reconnectTimeout = null;
+    let isUnmounted = false;
 
     const sendClientInfo = (sock, location = null) => {
       if (!sock || sock.readyState !== WebSocket.OPEN) return;
@@ -39,6 +44,9 @@ export function usePiWebSocket() {
 
       socket.onopen = () => {
         setIsOnline(true);
+        setHasEverConnected(true);
+        reconnectAttemptRef.current = 0;
+        lastHeartBeat.current = Date.now();
         sendClientInfo(socket);
         if (navigator.geolocation?.getCurrentPosition) {
           navigator.geolocation.getCurrentPosition(
@@ -74,12 +82,22 @@ export function usePiWebSocket() {
       };
 
       socket.onclose = () => {
+        if (isUnmounted) return;
         setIsOnline(false);
-        // Aggressive reconnect so controls become available quickly once Pi is up.
-        reconnectTimeout = setTimeout(connect, 1000);
+        const attempt = reconnectAttemptRef.current;
+        const base = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+        const jitter = Math.floor(Math.random() * 220);
+        reconnectAttemptRef.current += 1;
+        reconnectTimeout = setTimeout(connect, base + jitter);
       };
 
-      socket.onerror = () => socket.close();
+      socket.onerror = () => {
+        try {
+          socket.close();
+        } catch {
+          // ignore close races
+        }
+      };
     };
 
     connect();
@@ -96,6 +114,7 @@ export function usePiWebSocket() {
     }, PING_INTERVAL_MS);
 
     return () => {
+      isUnmounted = true;
       clearInterval(pingInterval);
       clearTimeout(reconnectTimeout);
       socket?.close();
@@ -114,5 +133,5 @@ export function usePiWebSocket() {
     socketRef.current.send(JSON.stringify(msg));
   };
 
-  return { stats, isOnline, socketRef, sendControl };
+  return { stats, isOnline, hasEverConnected, socketRef, sendControl };
 }

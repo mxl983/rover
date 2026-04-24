@@ -6,8 +6,8 @@ import { ControlCluster } from "./components/ControlCluster";
 import {
   PI_SYSTEM_ENDPOINT,
   PI_CAMERA_ENDPOINT,
-  PI_DOCKING_ENDPOINT,
   PI_HI_RES_CAPTURE_ENDPOINT,
+  BACKUP_STREAM_ENDPOINT,
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
 } from "./config";
@@ -15,7 +15,7 @@ import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
 import { WifiSignal } from "./components/WifiSignal";
 import { DriveAssistHUD } from "./components/DriveAssistHUD";
-import { ChevronLeft, LogOut } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
@@ -66,8 +66,8 @@ function readInitialControlMode() {
 }
 
 export default function App() {
-  const { isAuthenticated, sessionCreds, login, logout } = useRoverSession();
-  const { stats, isOnline: piOnline, sendControl } = usePiWebSocket();
+  const { isAuthenticated, sessionCreds, login } = useRoverSession();
+  const { stats, isOnline: piOnline, hasEverConnected, sendControl } = usePiWebSocket();
   const { isEspOnline, mqttClientRef } = useMqtt(
     isAuthenticated ? sessionCreds : null,
   );
@@ -79,6 +79,7 @@ export default function App() {
   const [focusMode, setFocusMode] = useState("far");
   const [compact, setCompact] = useState(true);
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
+  const [showBackupView, setShowBackupView] = useState(false);
 
   const setControlMode = (mode) => {
     if (mode !== "keyboard" && mode !== "joystick") return;
@@ -101,6 +102,7 @@ export default function App() {
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
+  const mountedAtRef = useRef(Date.now());
 
   const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
 
@@ -116,7 +118,10 @@ export default function App() {
       sendControl(payload);
       return Promise.resolve();
     }
-    setActionError("Control channel offline (WebSocket not connected)");
+    const startupGraceActive = Date.now() - mountedAtRef.current < 15000;
+    if (hasEverConnected || !startupGraceActive) {
+      setActionError("Control channel offline (WebSocket reconnecting)");
+    }
     return Promise.resolve();
   };
 
@@ -270,15 +275,6 @@ export default function App() {
     }
   };
 
-  const toggleDocking = async (isEnable) => {
-    setActionError(null);
-    try {
-      await apiPostJson(PI_DOCKING_ENDPOINT, { enabled: isEnable });
-    } catch (err) {
-      setActionError(err.message ?? "Docking toggle failed");
-    }
-  };
-
   const setQuietMode = async (enabled) => {
     setActionError(null);
     try {
@@ -328,6 +324,10 @@ export default function App() {
   const handleLaserToggle = async () => {
     setActionError(null);
     await sendControlNow({ command: "toggle_laser" });
+  };
+
+  const handleToggleBackupView = () => {
+    setShowBackupView((prev) => !prev);
   };
 
   const runAssistantAction = async (action) => {
@@ -458,6 +458,8 @@ export default function App() {
       <VideoStream
         dockingData={stats.docking}
         onVideoReadyChange={setVideoStreamReady}
+        backupStreamUrl={BACKUP_STREAM_ENDPOINT}
+        showBackupView={showBackupView}
       />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
@@ -519,7 +521,8 @@ export default function App() {
             onToggleLight={toggleLight}
             onCapture={handleCapture}
             isCapturing={isCapturing}
-            onDockingToggle={toggleDocking}
+            onToggleBackupView={handleToggleBackupView}
+            backupViewEnabled={showBackupView}
           />
         </div>
       )}
@@ -610,7 +613,8 @@ function HudFooter({
   onToggleLight,
   onCapture,
   isCapturing,
-  onDockingToggle,
+  onToggleBackupView,
+  backupViewEnabled,
 }) {
   const joystickProps = {
     onDrive,
@@ -629,6 +633,8 @@ function HudFooter({
       onToggleLight(nextState);
     },
     headlightOn: stats.usbPower === "on",
+    onToggleBackupView,
+    backupViewEnabled,
   };
 
   const schematic = (
@@ -682,7 +688,6 @@ function HudFooter({
           <>
             {!isMobile && controlMode === "keyboard" && (
               <ControlCluster
-                onDockingToggle={onDockingToggle}
                 onDrive={onDrive}
                 usbPower={stats.usbPower}
                 laserOn={laserOn}
@@ -696,10 +701,11 @@ function HudFooter({
                   onToggleLight(nextState);
                 }}
                 onLaserToggle={onLaserToggle}
-                isDockingMode={stats.isDockingMode}
                 onCapture={onCapture}
                 isCapturing={isCapturing}
                 onReset={onResetCamera}
+                onToggleBackupView={onToggleBackupView}
+                backupViewEnabled={backupViewEnabled}
               />
             )}
             {!isMobile && controlMode === "joystick" && (
@@ -710,7 +716,6 @@ function HudFooter({
 
             {isMobile && controlMode === "keyboard" && (
               <ControlCluster
-                onDockingToggle={onDockingToggle}
                 onDrive={onDrive}
                 usbPower={stats.usbPower}
                 laserOn={laserOn}
@@ -724,10 +729,11 @@ function HudFooter({
                   onToggleLight(nextState);
                 }}
                 onLaserToggle={onLaserToggle}
-                isDockingMode={stats.isDockingMode}
                 onCapture={onCapture}
                 isCapturing={isCapturing}
                 onReset={onResetCamera}
+                onToggleBackupView={onToggleBackupView}
+                backupViewEnabled={backupViewEnabled}
               />
             )}
           </>

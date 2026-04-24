@@ -7,11 +7,13 @@ const PI_SERVER_IP =
 const MQTT_HOST =
   import.meta.env.VITE_MQTT_HOST ??
   "wss://84f09906a62e42c78c5d9b0555aa71f1.s1.eu.hivemq.cloud:8884/mqtt";
+const RELAY_BASE_URL =
+  import.meta.env.VITE_RELAY_BASE_URL ?? "https://jjcloud.tail9d0237.ts.net";
 
 /** Camera API secret – optional; if unset, camera endpoints may reject or use server-side default. */
 export const CAMERA_SECRET = import.meta.env.VITE_CAMERA_SECRET ?? "";
 
-export { PI_SERVER_IP, MQTT_HOST };
+export { PI_SERVER_IP, MQTT_HOST, RELAY_BASE_URL };
 
 export const AUDIO_STREAM_HOST = `https://${PI_SERVER_IP}:8889/mic/whep`;
 export const VIDEO_STREAM_HOST = `https://${PI_SERVER_IP}:8889/cam/whep`;
@@ -34,6 +36,12 @@ export const VOICE_RECOGNITION_LIVE_LANG =
 export const PI_WEBSOCKET = `wss://${PI_SERVER_IP}:3000`;
 
 export const PI_HI_RES_CAPTURE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera/capture`;
+export const BACKUP_STREAM_ENDPOINT =
+  import.meta.env.VITE_BACKUP_STREAM_URL ||
+  "https://jjcloud.tail9d0237.ts.net:8787/api/cams/backup/stream";
+export const ROVER_STATE_ENDPOINT =
+  import.meta.env.VITE_ROVER_STATE_URL ||
+  "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
 
 /** Set VITE_VOICE_DRIVE_DEBUG=true to log assistant actions and control payloads in the browser console. */
 export const VOICE_DRIVE_DEBUG =

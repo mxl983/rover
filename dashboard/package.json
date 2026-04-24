@@ -14,12 +14,10 @@
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@xterm/xterm": "^6.0.0",
-    "framer-motion": "^12.34.0",
     "lucide-react": "^0.563.0",
     "mqtt": "^5.15.0",
     "nipplejs": "^0.10.2",
-    "pixi.js": "^8.17.1",
+    "pixi.js": "^8.18.1",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

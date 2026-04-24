@@ -3,10 +3,17 @@ import {
   VIDEO_STREAM_HOST,
   AUDIO_STREAM_HOST,
   AUDIO_TALK_HOST,
+  ROVER_STATE_ENDPOINT,
 } from "../constants";
+import { apiFetch } from "../api/client";
 import { VideoLoadingPhysics } from "./VideoLoadingPhysics.jsx";
 
-export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) => {
+export const VideoStream = ({
+  dockingData: _dockingData,
+  onVideoReadyChange,
+  backupStreamUrl = "",
+  showBackupView = false,
+}) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const pcRef = useRef(null);
@@ -14,14 +21,79 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
   const listenPcRef = useRef(null);
   const localStreamRef = useRef(null);
   const retryTimeoutRef = useRef({ video: null, talk: null, listen: null });
+  const reconnectInFlightRef = useRef(false);
+  const orientationRetryRef = useRef(null);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingPercent, setLoadingPercent] = useState(null);
+  const [isBackupLoading, setIsBackupLoading] = useState(false);
+  const [backupAvailable, setBackupAvailable] = useState(true);
   const [roverMicEnabled, setRoverMicEnabled] = useState(false);
   const [dashMicEnabled, setDashMicEnabled] = useState(false);
 
   useEffect(() => {
     onVideoReadyChange?.(!isLoading);
   }, [isLoading, onVideoReadyChange]);
+
+  useEffect(() => {
+    if (!isLoading) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+
+    const parsePercent = (data) => {
+      if (!data || typeof data !== "object") return null;
+      const asNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
+      };
+      return (
+        asNum(data.bootPercentage) ??
+        asNum(data.bootPercent) ??
+        asNum(data.progressPct) ??
+        asNum(data.progress) ??
+          asNum(data?.rover?.bootProgressPct) ??
+          asNum(data?.rover?.bootPercentage) ??
+          asNum(data?.rover?.bootPercent) ??
+          asNum(data?.rover?.progressPct) ??
+          asNum(data?.rover?.progress) ??
+        asNum(data?.state?.bootPercentage) ??
+        asNum(data?.state?.bootPercent)
+      );
+    };
+
+    const poll = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const res = await apiFetch(ROVER_STATE_ENDPOINT, {
+          method: "GET",
+          timeout: 1200,
+          retries: 0,
+        });
+        if (!res.ok) return;
+        const text = await res.text();
+        if (!text) return;
+        const data = JSON.parse(text);
+        const pct = parsePercent(data);
+        if (pct != null && !cancelled) setLoadingPercent(pct);
+      } catch {
+        // Relay unavailable: keep loader functional without percentage.
+        if (!cancelled) setLoadingPercent(null);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => {
+      void poll();
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isLoading]);
 
   const cleanup = (type) => {
     if (type === "video") {
@@ -40,11 +112,14 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
     }
     if (retryTimeoutRef.current[type])
       clearTimeout(retryTimeoutRef.current[type]);
+    retryTimeoutRef.current[type] = null;
   };
 
-  const startVideoWebRTC = useCallback(async () => {
+  const startVideoWebRTC = useCallback(async (opts = {}) => {
+    const { showLoader = true } = opts;
+    reconnectInFlightRef.current = false;
     cleanup("video");
-    setIsLoading(true);
+    if (showLoader) setIsLoading(true);
 
     try {
       const pc = new RTCPeerConnection({
@@ -52,18 +127,19 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
       });
       pcRef.current = pc;
 
-      // CRITICAL: Detect when stream drops (e.g., during resolution change)
+      const scheduleReconnect = (delayMs, forceLoader = false) => {
+        if (reconnectInFlightRef.current) return;
+        reconnectInFlightRef.current = true;
+        retryTimeoutRef.current.video = setTimeout(() => {
+          void startVideoWebRTC({ showLoader: forceLoader });
+        }, delayMs);
+      };
+
+      // Detect stream drops, but avoid full-screen flash for transient disconnects.
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
-        if (
-          state === "failed" ||
-          state === "disconnected" ||
-          state === "closed"
-        ) {
-          console.log(`Video connection ${state}. Retrying...`);
-          setIsLoading(true);
-          retryTimeoutRef.current.video = setTimeout(startVideoWebRTC, 2000);
-        }
+        if (state === "disconnected") scheduleReconnect(900, false);
+        else if (state === "failed" || state === "closed") scheduleReconnect(800, true);
       };
 
       pc.addTransceiver("video", { direction: "recvonly" });
@@ -91,7 +167,9 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
         throw new Error("Video SDP exchange failed");
       }
     } catch {
-      retryTimeoutRef.current.video = setTimeout(startVideoWebRTC, 3000);
+      retryTimeoutRef.current.video = setTimeout(() => {
+        void startVideoWebRTC({ showLoader: true });
+      }, 2000);
     }
   }, []);
 
@@ -102,6 +180,14 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       talkPcRef.current = pc;
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "failed" || state === "disconnected" || state === "closed") {
+          retryTimeoutRef.current.talk = setTimeout(() => {
+            void startTalkWebRTC();
+          }, 1500);
+        }
+      };
       const transceiver = pc.addTransceiver("audio", { direction: "sendonly" });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
@@ -122,6 +208,9 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
       }
     } catch (err) {
       console.error("Talk Error:", err);
+      retryTimeoutRef.current.talk = setTimeout(() => {
+        void startTalkWebRTC();
+      }, 2200);
     }
   }, [dashMicEnabled]);
 
@@ -132,6 +221,14 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       listenPcRef.current = pc;
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "failed" || state === "disconnected" || state === "closed") {
+          retryTimeoutRef.current.listen = setTimeout(() => {
+            void startListenWebRTC();
+          }, 1500);
+        }
+      };
       pc.ontrack = (e) => {
         if (audioRef.current) {
           audioRef.current.srcObject = e.streams[0];
@@ -152,6 +249,9 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
       }
     } catch (err) {
       console.error("Listen Error:", err);
+      retryTimeoutRef.current.listen = setTimeout(() => {
+        void startListenWebRTC();
+      }, 2200);
     }
   }, [roverMicEnabled]);
 
@@ -182,6 +282,33 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
     };
   }, [startVideoWebRTC, startTalkWebRTC, startListenWebRTC]);
 
+  useEffect(() => {
+    const onViewportChange = () => {
+      if (orientationRetryRef.current) clearTimeout(orientationRetryRef.current);
+      orientationRetryRef.current = setTimeout(() => {
+        if (document.hidden) return;
+        void startVideoWebRTC({ showLoader: false });
+      }, 280);
+    };
+    window.addEventListener("orientationchange", onViewportChange);
+    window.addEventListener("resize", onViewportChange);
+    return () => {
+      window.removeEventListener("orientationchange", onViewportChange);
+      window.removeEventListener("resize", onViewportChange);
+      if (orientationRetryRef.current) clearTimeout(orientationRetryRef.current);
+    };
+  }, [startVideoWebRTC]);
+
+  useEffect(() => {
+    if (!showBackupView) {
+      setIsBackupLoading(false);
+      setBackupAvailable(true);
+      return;
+    }
+    setBackupAvailable(true);
+    setIsBackupLoading(Boolean(backupStreamUrl));
+  }, [showBackupView, backupStreamUrl]);
+
   return (
     <div style={containerStyle}>
       <audio ref={audioRef} autoPlay />
@@ -208,6 +335,7 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
           <div style={loaderForeground}>
             <div className="glitch-text polygon-label" style={loaderTextStyle}>
               COSMIC PIT STOP IN PROGRESS
+              {loadingPercent != null ? ` — ${loadingPercent}% READY` : ""}
             </div>
             <div style={loaderSubStyle}>tuning antennas, dodging asteroids, and finding your rover feed...</div>
           </div>
@@ -221,6 +349,35 @@ export const VideoStream = ({ dockingData: _dockingData, onVideoReadyChange }) =
         playsInline
         style={{ ...videoStyle, opacity: isLoading ? 0.3 : 1 }}
       />
+
+      {showBackupView && backupAvailable && (
+        <div style={pipContainerStyle}>
+          {backupStreamUrl ? (
+            <>
+              <img
+                src={backupStreamUrl}
+                alt="Backup camera stream"
+                style={pipVideoStyle}
+                onLoad={() => {
+                  setIsBackupLoading(false);
+                }}
+                onError={() => {
+                  setIsBackupLoading(false);
+                  // Relay unavailable: remove backup PiP and keep main view unaffected.
+                  setBackupAvailable(false);
+                }}
+              />
+              <div style={backupBadgeStyle}>BACKUP VIEW</div>
+              <div style={pipCursorStyle} aria-hidden="true" />
+              {isBackupLoading ? (
+                <div style={pipOverlayTextStyle}>Connecting...</div>
+              ) : null}
+            </>
+          ) : (
+            <div style={backupMissingStyle}>Backup stream URL is not configured.</div>
+          )}
+        </div>
+      )}
 
       <style>{`
         .polygon-label.glitch-text {
@@ -339,6 +496,85 @@ const loaderSubStyle = {
   textAlign: "center",
   maxWidth: "280px",
   lineHeight: 1.45,
+};
+
+const backupMissingStyle = {
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "rgba(255, 255, 255, 0.75)",
+  fontSize: "14px",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  textAlign: "center",
+  padding: "8px",
+};
+
+const backupBadgeStyle = {
+  position: "absolute",
+  top: "8px",
+  left: "8px",
+  zIndex: 120,
+  padding: "4px 8px",
+  borderRadius: "8px",
+  color: "#f3e8ff",
+  fontSize: "10px",
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  background: "rgba(139, 92, 246, 0.7)",
+  border: "1px solid rgba(196, 181, 253, 0.85)",
+};
+
+const pipContainerStyle = {
+  position: "absolute",
+  top: "20px",
+  right: "20px",
+  width: "28vw",
+  maxWidth: "360px",
+  minWidth: "220px",
+  aspectRatio: "4 / 3",
+  overflow: "hidden",
+  borderRadius: "10px",
+  border: "1px solid rgba(196, 181, 253, 0.75)",
+  background: "rgba(0, 0, 0, 0.8)",
+  boxShadow: "0 8px 20px rgba(0, 0, 0, 0.45)",
+  zIndex: 115,
+};
+
+const pipVideoStyle = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+};
+
+const pipOverlayTextStyle = {
+  position: "absolute",
+  left: "50%",
+  bottom: "10px",
+  transform: "translateX(-50%)",
+  background: "rgba(0, 0, 0, 0.58)",
+  color: "#f3f4f6",
+  border: "1px solid rgba(255, 255, 255, 0.25)",
+  borderRadius: "8px",
+  fontSize: "11px",
+  padding: "6px 8px",
+  whiteSpace: "nowrap",
+};
+
+const pipCursorStyle = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: "12px",
+  height: "12px",
+  border: "1px solid rgba(255, 255, 255, 0.75)",
+  borderRadius: "50%",
+  boxShadow: "0 0 8px rgba(255, 255, 255, 0.35)",
+  zIndex: 121,
+  pointerEvents: "none",
 };
 
 const btnStyle = (active, color) => ({

@@ -8,6 +8,7 @@ import { stateService } from "./services/stateService.js";
 import {
   initTelemetry,
   recordTelemetry,
+  recordRoverHeartbeat,
   closeTelemetry,
 } from "./services/telemetryService.js";
 import { speak } from "./utils/sysUtils.js";
@@ -48,7 +49,9 @@ process.on("SIGINT", onShutdown);
 
 let LAST_CHECK_TIME = Date.now();
 const STARTUP_TIME = Date.now();
+const BOOT_STARTED_AT_ISO = new Date(STARTUP_TIME).toISOString();
 let LAST_TELEMETRY_WRITE = 0;
+let LAST_HEARTBEAT_WRITE = 0;
 
 const GRACE_PERIOD_MS = 2 * 60 * 1000;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -124,6 +127,14 @@ setInterval(() => {
   ) {
     recordTelemetry(health, "health_report_scheduled");
     LAST_TELEMETRY_WRITE = now;
+  }
+  if (Object.keys(health).length && now - LAST_HEARTBEAT_WRITE >= 10_000) {
+    recordRoverHeartbeat({
+      phase: timeSinceStartup < 50_000 ? "booting" : "ready",
+      bootStartedAt: BOOT_STARTED_AT_ISO,
+      health,
+    });
+    LAST_HEARTBEAT_WRITE = now;
   }
 
   const payload = {

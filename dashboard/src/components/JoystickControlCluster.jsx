@@ -136,10 +136,12 @@ export const DualJoystickControls = ({
   laserOn,
   onHeadlightToggle,
   headlightOn,
-  onVoiceStart,
-  onVoiceStop,
-  voiceSupported,
-  voiceListening,
+  onVoiceStart: _onVoiceStart,
+  onVoiceStop: _onVoiceStop,
+  voiceSupported: _voiceSupported,
+  voiceListening: _voiceListening,
+  onToggleBackupView,
+  backupViewEnabled,
   children,
 }) => {
   const leftZoneRef = useRef(null);
@@ -170,18 +172,21 @@ export const DualJoystickControls = ({
   const onLookDownRef = useRef(onLookDown);
   const onLaserToggleRef = useRef(onLaserToggle);
   const onHeadlightToggleRef = useRef(onHeadlightToggle);
+  const onToggleBackupViewRef = useRef(onToggleBackupView);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
     onLaserToggleRef.current = onLaserToggle;
     onHeadlightToggleRef.current = onHeadlightToggle;
-  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle]);
+    onToggleBackupViewRef.current = onToggleBackupView;
+  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle, onToggleBackupView]);
 
   const gamepadButtonsPrevRef = useRef({
     lt: false,
     rt: false,
     lb: false,
     rb: false,
+    a: false,
   });
 
   const driveStateChanged = (a, b) =>
@@ -386,20 +391,28 @@ export const DualJoystickControls = ({
       const gp = getFirstConnectedGamepad();
       const prev = gamepadButtonsPrevRef.current;
       if (!gp) {
-        gamepadButtonsPrevRef.current = { lt: false, rt: false, lb: false, rb: false };
+        gamepadButtonsPrevRef.current = {
+          lt: false,
+          rt: false,
+          lb: false,
+          rb: false,
+          a: false,
+        };
       } else {
         const lt = triggerHeld(gp.buttons?.[6]);
         const rt = triggerHeld(gp.buttons?.[7]);
         const lb = bumperHeld(gp.buttons?.[4]);
         const rb = bumperHeld(gp.buttons?.[5]);
+        const a = bumperHeld(gp.buttons?.[0]);
         const allowActions = !ignoreGamepadRef.current;
         if (allowActions) {
           if (lt && !prev.lt) onResetRef.current?.();
           if (rt && !prev.rt) onLookDownRef.current?.();
           if (lb && !prev.lb) onLaserToggleRef.current?.();
           if (rb && !prev.rb) onHeadlightToggleRef.current?.();
+          if (a && !prev.a) onToggleBackupViewRef.current?.();
         }
-        gamepadButtonsPrevRef.current = { lt, rt, lb, rb };
+        gamepadButtonsPrevRef.current = { lt, rt, lb, rb, a };
       }
 
       const pads = navigator.getGamepads();
@@ -559,6 +572,16 @@ export const DualJoystickControls = ({
           left: auto;
         }
 
+        .drive-bottom-center {
+          top: auto;
+          bottom: -8px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .drive-bottom-center:active {
+          transform: translateX(-50%) scale(0.9);
+        }
+
         .gimbal-bottom-left {
           top: auto;
           bottom: -8px;
@@ -621,6 +644,22 @@ export const DualJoystickControls = ({
         .voice-ptt:active {
           transform: translateX(-50%) scale(0.94);
         }
+
+        .backup-on {
+          border-color: #8b5cf6 !important;
+          color: #f3e8ff !important;
+          background: rgba(139, 92, 246, 0.8) !important;
+        }
+        .laser-on {
+          border-color: #ff4d4d !important;
+          color: #ffd6d6 !important;
+          background: rgba(255, 77, 77, 0.75) !important;
+        }
+        .headlight-on {
+          border-color: #ffd53d !important;
+          color: #2a2100 !important;
+          background: rgba(255, 213, 61, 0.88) !important;
+        }
       `}</style>
 
       {/* LEFT JOYSTICK: DRIVE + L / R quick turn buttons */}
@@ -659,6 +698,22 @@ export const DualJoystickControls = ({
           title="R (slow 90° right)"
         >
           R
+        </button>
+
+        <button
+          type="button"
+          className={`reset-btn-sibling drive-bottom-center${backupViewEnabled ? " backup-on" : ""}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleBackupView?.();
+          }}
+          style={{ borderRadius: "20px" }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Toggle backup camera view"
+          title="Backup camera view"
+        >
+          BKP
         </button>
       </div>
 
@@ -707,7 +762,7 @@ export const DualJoystickControls = ({
         {onLaserToggle && (
           <button
             type="button"
-            className="reset-btn-sibling gimbal-bottom-left"
+            className={`reset-btn-sibling gimbal-bottom-left${laserOn ? " laser-on" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -725,7 +780,7 @@ export const DualJoystickControls = ({
         {onHeadlightToggle && (
           <button
             type="button"
-            className="reset-btn-sibling gimbal-bottom-right"
+            className={`reset-btn-sibling gimbal-bottom-right${headlightOn ? " headlight-on" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -758,5 +813,7 @@ DualJoystickControls.propTypes = {
   onVoiceStop: PropTypes.func,
   voiceSupported: PropTypes.bool,
   voiceListening: PropTypes.bool,
+  onToggleBackupView: PropTypes.func,
+  backupViewEnabled: PropTypes.bool,
   children: PropTypes.node,
 };

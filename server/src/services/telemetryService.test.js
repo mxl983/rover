@@ -1,39 +1,111 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import {
-  initTelemetry,
-  recordTelemetry,
-  getTelemetry,
-  recordClientConnection,
-  closeTelemetry,
-} from "./telemetryService.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 describe("telemetryService", () => {
-  beforeAll(() => {
-    initTelemetry();
+  const envSnapshot = {};
+  const envKeys = [
+    "TELEMETRY_ENABLED",
+    "TELEMETRY_RELAY_URL",
+    "RELAY_API_TOKEN",
+  ];
+
+  beforeEach(() => {
+    for (const k of envKeys) envSnapshot[k] = process.env[k];
+    process.env.TELEMETRY_ENABLED = "true";
+    process.env.TELEMETRY_RELAY_URL = "https://relay.test";
+    process.env.RELAY_API_TOKEN = "abc123";
+    vi.resetModules();
   });
 
-  afterAll(() => {
-    closeTelemetry();
+  afterEach(() => {
+    for (const k of envKeys) {
+      if (envSnapshot[k] === undefined) delete process.env[k];
+      else process.env[k] = envSnapshot[k];
+    }
+    vi.unstubAllGlobals();
   });
 
-  it("recordTelemetry and getTelemetry roundtrip", () => {
-    recordTelemetry(
-      { voltage: 11, battery: "50", distance: 1, pan: 0, tilt: 0, cpuTemp: "40", cpuLoad: 10, wifiSignal: -50, usbPower: "on" },
-      "test_event",
+  it("recordTelemetry relays ingest payload", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }),
     );
-    const rows = getTelemetry({ limit: 5 });
-    expect(Array.isArray(rows)).toBe(true);
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect(rows[0].event).toBe("test_event");
+    vi.stubGlobal("fetch", fetchMock);
+    const { recordTelemetry } = await import("./telemetryService.js");
+
+    recordTelemetry({ battery: 75.2, voltage: 12.1 }, "health_report_scheduled");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://relay.test/api/telemetry/ingest",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer abc123",
+          "Content-Type": "application/json",
+        }),
+      }),
+    );
   });
 
-  it("recordClientConnection inserts", () => {
-    recordClientConnection({
-      event: "connect",
-      clientIp: "127.0.0.1",
-      userAgent: "test-ua",
+  it("getTelemetry returns relay telemetry array", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ telemetry: [{ id: 1, event: "ok" }] }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getTelemetry } = await import("./telemetryService.js");
+
+    const rows = await getTelemetry({ limit: 5 });
+    expect(rows).toEqual([{ id: 1, event: "ok" }]);
+  });
+
+  it("recordClientConnection relays client payload", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { recordClientConnection } = await import("./telemetryService.js");
+
+    recordClientConnection({ event: "connect", clientIp: "127.0.0.1" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://relay.test/api/telemetry/client-connection",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+  });
+
+  it("recordRoverHeartbeat relays heartbeat payload", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { recordRoverHeartbeat } = await import("./telemetryService.js");
+
+    recordRoverHeartbeat({
+      phase: "booting",
+      bootStartedAt: "2026-01-01T00:00:00.000Z",
+      health: { battery: 91.1, videoOn: true },
     });
-    const rows = getTelemetry({ limit: 1 });
-    expect(rows.length).toBeGreaterThanOrEqual(0);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://relay.test/api/rover/heartbeat",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
   });
 });
