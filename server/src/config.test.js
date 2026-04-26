@@ -46,4 +46,21 @@ describe("config", () => {
     );
     expect(cfg.telemetry.relayTimeoutMs).toBe(3000);
   });
+
+  it("includes github pages and tailnet dashboard CORS defaults", async () => {
+    for (const k of envKeys) snapshot[k] = process.env[k];
+    delete process.env.CORS_ORIGINS;
+    vi.resetModules();
+    const { default: cfg } = await import("./config.js");
+    expect(cfg.cors.origins).toContain("https://mxl983.github.io");
+    expect(cfg.cors.origins).toContain("https://jjcloud.tail9d0237.ts.net");
+  });
+
+  it("normalizes CORS origins with path segments", async () => {
+    for (const k of envKeys) snapshot[k] = process.env[k];
+    process.env.CORS_ORIGINS = "https://jjcloud.tail9d0237.ts.net/mangomate";
+    vi.resetModules();
+    const { default: cfg } = await import("./config.js");
+    expect(cfg.cors.origins).toContain("https://jjcloud.tail9d0237.ts.net");
+  });
 });

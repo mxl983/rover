@@ -23,6 +23,8 @@ describe("isValidDrivePayload", () => {
   it("accepts command shortcuts", () => {
     expect(isValidDrivePayload({ command: "look_down" })).toBe(true);
     expect(isValidDrivePayload({ command: "toggle_laser" })).toBe(true);
+    expect(isValidDrivePayload({ command: "meow" })).toBe(true);
+    expect(isValidDrivePayload({ command: "MEOW" })).toBe(true);
   });
 
   it("rejects bad drive type", () => {

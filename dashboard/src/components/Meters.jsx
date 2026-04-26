@@ -1,6 +1,13 @@
 import React from "react";
 import { RoverSchematic } from "./RoverSchematic";
 
+const formatVoltage = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  // Show as many meaningful decimals as JS gives, without trailing zeros.
+  return n.toFixed(6).replace(/\.?0+$/, "");
+};
+
 export const Meters = ({ stats, compact }) => {
   return (
     <div className="meter-container">
@@ -19,7 +26,7 @@ export const Meters = ({ stats, compact }) => {
               BAT <span>{stats.battery || "-"}%</span>
             </div>
             <div className="stat">
-              VOL <span>{stats.voltage || "-"}V</span>
+              VOL <span>{formatVoltage(stats.voltage)}V</span>
             </div>
             <div className="stat">
               DLAY <span id="lat">{stats.latency || "-"}ms</span>

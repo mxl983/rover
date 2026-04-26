@@ -21,7 +21,6 @@
     "http-proxy-middleware": "^3.0.5",
     "mqtt": "^5.15.0",
     "pino": "^9.5.0",
-    "play-sound": "^1.1.6",
     "python-shell": "^5.0.0",
     "ws": "^8.19.0",
     "zod": "^3.23.8"

@@ -87,13 +87,16 @@ services:
       BLINKA_FORCEBOARD: "RASPBERRY_PI_3B"
       BLINKA_FORCECHIP: "BCM2XXX"
       # Use ALSA "default" so playback goes through dmix (see ./alsa/asound.conf + mediamtx mount).
+      # If you hear nothing, set dmix slave in ./alsa/asound.conf to your USB card from: docker exec control_server aplay -l
       TTS_ALSA_DEVICE: "default"
+      APLAY_DEVICE_FALLBACK: "plughw:3,0"
       # Mandarin TTS engine preference: auto (edge->piper->espeak), edge, piper, or espeak
       TTS_ENGINE: "auto"
       # Edge TTS Mandarin neural voice (best quality; requires internet)
       EDGE_TTS_VOICE: "zh-CN-XiaoxiaoNeural"
       EDGE_TTS_RATE: "+0%"
-      EDGE_TTS_VOLUME: "-35%"
+      # Too low (e.g. -35%) is hard to hear on USB after short SFX; tune in .env if needed.
+      EDGE_TTS_VOLUME: "-12%"
       # Piper settings (override in .env if needed)
       PIPER_MODEL_PATH: "/app/tts/zh_CN-huayan-medium.onnx"
       PIPER_SAMPLE_RATE: "22050"

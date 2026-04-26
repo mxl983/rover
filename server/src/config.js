@@ -18,6 +18,14 @@ const parseOrigins = (value, fallback) => {
   return raw
     .split(",")
     .map((o) => o.trim())
+    .map((o) => {
+      try {
+        // CORS matches Origin header (scheme + host + optional port), not path.
+        return new URL(o).origin;
+      } catch {
+        return o;
+      }
+    })
     .filter(Boolean);
 };
 
@@ -30,7 +38,7 @@ const config = {
   cors: {
     origins: parseOrigins(
       process.env.CORS_ORIGINS,
-      "http://localhost:5173,https://mxl983.github.io",
+      "http://localhost:5173,https://mxl983.github.io,https://jjcloud.tail9d0237.ts.net",
     ),
   },
   ssl: {

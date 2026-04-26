@@ -25,7 +25,8 @@ class TelemetryMonitor:
     def get_voltage(self):
         try:
             voltage_raw = IIC.get_battery_voltage()
-            return voltage_raw
+            adc_raw = IIC.get_battery_voltage_raw()
+            return {"voltage": voltage_raw, "raw": adc_raw}
                 
         except Exception as e:
             # Log error to stderr so it doesn't break the JSON stdout pipe
@@ -60,14 +61,15 @@ if __name__ == "__main__":
             cmd = json.loads(line.strip())
             
             if cmd.get("command") == "get_telemetry":
-                voltage = monitor.get_voltage()
+                voltage_reading = monitor.get_voltage() or {"voltage": None, "raw": None}
                 distance = monitor.get_distances()
                 
                 # Output exactly what Node.js expects
                 print(json.dumps({
                     "status": "ok",
                     "type": "telemetry",
-                    "voltage": voltage,
+                    "voltage": voltage_reading.get("voltage"),
+                    "voltageRaw": voltage_reading.get("raw"),
                     "unit": "V",
                     "distance": distance,
                 }))

@@ -1,6 +1,7 @@
 import smbus
 import struct
 import time
+import os
 
 UPLOAD_DATA = 1  # 1:接收总的编码器数据 2:接收实时的编码器
 # 1: Receive total encoder data 2: Receive real-time encoder
@@ -225,14 +226,22 @@ def set_motor_parameter():
 
 VOLTAGE_REG = 0x08
 
-def get_battery_voltage():
+
+def get_battery_voltage_raw():
   try:
     # Read 2 bytes from register 0x08
-    buf = i2c_read(MOTOR_MODEL_ADDR, 0x08, 2)
-    
+    buf = i2c_read(MOTOR_MODEL_ADDR, VOLTAGE_REG, 2)
     # Combine bytes: High byte << 8 | Low byte
-    raw_val = (buf[0] << 8) | buf[1]
-    return round(raw_val * 0.1, 2)
-      
-  except Exception as e:
+    return (buf[0] << 8) | buf[1]
+  except Exception:
+    return 0
+
+def get_battery_voltage():
+  try:
+    raw_val = get_battery_voltage_raw()
+    # Keep this configurable in case board firmware uses a different scale.
+    # Default remains the same behavior as before: 0.1V per LSB.
+    scale = float(os.environ.get("BATTERY_VOLTAGE_SCALE", "0.1"))
+    return raw_val * scale
+  except Exception:
     return 0.0

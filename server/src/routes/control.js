@@ -8,11 +8,13 @@ const router = express.Router();
 export function isValidDrivePayload(body) {
   if (Array.isArray(body)) return true;
   if (body && typeof body === "object") {
+    const cmd = typeof body.command === "string" ? body.command.toLowerCase() : "";
     if (
-      body.command === "look_down" ||
-      body.command === "turn_left_90_slow" ||
-      body.command === "turn_right_90_slow" ||
-      body.command === "toggle_laser"
+      cmd === "look_down" ||
+      cmd === "turn_left_90_slow" ||
+      cmd === "turn_right_90_slow" ||
+      cmd === "toggle_laser" ||
+      cmd === "meow"
     )
       return true;
     if ("drive" in body && body.drive != null && typeof body.drive !== "object") return false;

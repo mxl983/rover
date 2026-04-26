@@ -47,6 +47,33 @@ describe("telemetryService", () => {
         }),
       }),
     );
+
+    const [, request] = fetchMock.mock.calls[0];
+    const payload = JSON.parse(request.body);
+    expect(payload.event).toBe("health_report_scheduled");
+    expect(payload.health.voltage).toBe(12.1);
+  });
+
+  it("recordTelemetry preserves high-precision voltage", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { recordTelemetry } = await import("./telemetryService.js");
+
+    recordTelemetry(
+      { battery: 75.2, voltage: 12.345678901234, voltageRaw: 123456 },
+      "health_report_scheduled",
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    const [, request] = fetchMock.mock.calls[0];
+    const payload = JSON.parse(request.body);
+    expect(payload.health.voltage).toBe(12.345678901234);
+    expect(payload.health.voltageRaw).toBe(123456);
   });
 
   it("getTelemetry returns relay telemetry array", async () => {

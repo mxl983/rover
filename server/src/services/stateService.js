@@ -24,6 +24,7 @@ class StateService {
     /** Last resolved charging state. */
     this._isCharging = false;
     this.currentVoltage = 0;
+    this.currentVoltageRaw = null;
     this.currentBatteryPct = 0;
     this.distance = 0;
     this.usbPowerState = true;
@@ -88,6 +89,7 @@ class StateService {
       return {
         battery: this.getBatteryPct(),
         voltage: this.currentVoltage,
+        voltageRaw: this.currentVoltageRaw,
         isCharging: this.getIsCharging(),
         distance: this.distance,
         usbPower: this.usbPowerState ? "on" : "off",

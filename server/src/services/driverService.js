@@ -3,6 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { AutoDocker } from "./autoDocker.js";
 import { stateService } from "./stateService.js";
+import { playSystemAudio, speak } from "../utils/sysUtils.js";
+import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, "../../");
@@ -117,7 +119,10 @@ export class DriverService {
       try {
         const data = JSON.parse(message);
         if (data.type === "telemetry") {
-          stateService.currentVoltage = data.voltage;
+          const parsedVoltage = Number(data.voltage);
+          stateService.currentVoltage = Number.isFinite(parsedVoltage) ? parsedVoltage : 0;
+          const parsedVoltageRaw = Number(data.voltageRaw);
+          stateService.currentVoltageRaw = Number.isFinite(parsedVoltageRaw) ? parsedVoltageRaw : null;
           stateService.distance = data.distance || 0;
           if (this._distanceFreshResolve) {
             if (this._distanceFreshTimer) {
@@ -148,6 +153,20 @@ export class DriverService {
   }
 
   sendMoveCommand(keys) {
+    if (
+      keys &&
+      typeof keys === "object" &&
+      !Array.isArray(keys) &&
+      typeof keys.command === "string" &&
+      keys.command.toLowerCase() === "meow"
+    ) {
+      logger.info("Drive command meow: playing clip then TTS 芒果×2");
+      playSystemAudio("meow.mp3", () => {
+        // Edge default volume can be quiet after SFX; short phrase says the name twice.
+        speak("芒果，芒果", { language: "zh", volume: "+5%" });
+      });
+      return;
+    }
     if (!this.motorShell) return;
     try {
       this.motorShell.send(JSON.stringify(keys));

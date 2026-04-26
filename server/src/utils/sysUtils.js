@@ -1,7 +1,125 @@
 import fs from "fs";
 import { execSync, spawn, spawnSync } from "child_process";
-import playerPkg from "play-sound";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __sysUtilsDir = path.dirname(fileURLToPath(import.meta.url));
+
+/** System clips (meow.mp3, etc.): repo `server/audios`, or `/app/audios` in Docker. Override with AUDIO_ASSETS_DIR. */
+function audioAssetsDir() {
+  const fromEnv = String(process.env.AUDIO_ASSETS_DIR || "").trim();
+  if (fromEnv) return fromEnv;
+  return path.join(__sysUtilsDir, "../../audios");
+}
+
+/** Ordered `aplay` argv lists for WAV playback (USB / dmix / explicit PCM). */
+function aplayAttemptArgLists(wavPath) {
+  const d = String(process.env.TTS_ALSA_DEVICE || "default").trim() || "default";
+  const roverPcm = String(process.env.ROVER_ALSA_PLAYBACK_PCM || "rover_play").trim();
+  const fb = String(process.env.APLAY_DEVICE_FALLBACK || "plughw:3,0").trim();
+  const extra = String(process.env.APLAY_EXTRA_DEVICES || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const lists = [];
+  if (roverPcm) lists.push(["-D", roverPcm, "-q", wavPath]);
+  lists.push(["-q", wavPath]);
+  lists.push(["-D", "default", "-q", wavPath]);
+  if (d !== "default") lists.push(["-D", d, "-q", wavPath]);
+  for (const dev of extra) lists.push(["-D", dev, "-q", wavPath]);
+  if (fb && fb !== "default" && fb !== d && !extra.includes(fb)) {
+    lists.push(["-D", fb, "-q", wavPath]);
+  }
+  const seen = new Set();
+  return lists.filter((args) => {
+    const key = args.join("\0");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function runAplayAttempts(wavPath, onComplete) {
+  const lists = aplayAttemptArgLists(wavPath);
+  const run = (idx) => {
+    if (idx >= lists.length) {
+      const err = new Error(
+        `aplay could not play ${path.basename(wavPath)} (${lists.length} attempts)`,
+      );
+      console.error(err.message);
+      if (typeof onComplete === "function") onComplete(err);
+      return;
+    }
+    const args = lists[idx];
+    const child = spawn("aplay", args, { stdio: ["ignore", "ignore", "pipe"] });
+    let errBuf = "";
+    child.stderr?.on("data", (c) => {
+      errBuf += c.toString();
+    });
+    child.on("error", (err) => {
+      console.warn("Playback (aplay):", err.message);
+      run(idx + 1);
+    });
+    child.on("close", (code) => {
+      if (code && code !== 0) {
+        const tail = errBuf.trim().slice(0, 240);
+        console.warn(
+          `Playback (aplay ${args.slice(0, 3).join(" ")}) exited with code ${code}`,
+          tail ? `: ${tail}` : "",
+        );
+        run(idx + 1);
+        return;
+      }
+      console.log(`Finished playing (aplay): ${path.basename(wavPath)}`);
+      if (typeof onComplete === "function") onComplete(null);
+    });
+  };
+  run(0);
+}
+
+/**
+ * Play .wav or .mp3: always **decode then aplay** (or aplay WAV directly).
+ * Bare `mpg123 file.mp3` often exits 0 while sending audio to HDMI or a sink you are not listening to.
+ */
+function playFileWithMpg123Attempts(filePath, onComplete) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".wav") {
+    runAplayAttempts(filePath, onComplete);
+    return;
+  }
+
+  const tmpWav = path.join(
+    "/tmp",
+    `rover-decode-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`,
+  );
+  const dec = spawn("mpg123", ["-q", "-w", tmpWav, filePath], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let decErr = "";
+  dec.stderr?.on("data", (c) => {
+    decErr += c.toString();
+  });
+  dec.on("error", (err) => {
+    console.warn("Playback (mpg123 -w decode):", err.message);
+    if (typeof onComplete === "function") onComplete(err);
+  });
+  dec.on("close", (decCode) => {
+    if (decCode && decCode !== 0) {
+      console.warn(
+        `Playback (mpg123 -w decode) exited with code ${decCode}`,
+        decErr.trim().slice(0, 240),
+      );
+      if (typeof onComplete === "function") {
+        onComplete(new Error(`mpg123 decode failed (${decCode})`));
+      }
+      return;
+    }
+    runAplayAttempts(tmpWav, (aplayErr) => {
+      fs.unlink(tmpWav, () => {});
+      if (typeof onComplete === "function") onComplete(aplayErr);
+    });
+  });
+}
 
 let cachedZhVoice = null;
 let loggedZhVoice = false;
@@ -214,7 +332,6 @@ function speakWithEdge(text, options = {}) {
       console.warn("TTS (edge-tts) exited with code", code);
       return;
     }
-    const device = String(process.env.TTS_ALSA_DEVICE || "default").trim();
     const decode = spawn("mpg123", ["-q", "-w", wavFile, outFile], {
       stdio: ["ignore", "ignore", "ignore"],
     });
@@ -227,35 +344,13 @@ function speakWithEdge(text, options = {}) {
         fs.unlink(outFile, () => {});
         return;
       }
-      const attempts = [
-        ["-q", wavFile], // prefer ALSA default first for stability
-        device === "default" ? null : ["-D", device, "-q", wavFile],
-      ].filter(Boolean);
-      const playAttempt = (idx) => {
-        const args = attempts[idx];
-        if (!args) {
-          fs.unlink(wavFile, () => {});
-          fs.unlink(outFile, () => {});
-          return;
+      playFileWithMpg123Attempts(wavFile, (playErr) => {
+        if (playErr) {
+          console.warn("TTS (edge playback via mpg123) failed:", playErr.message);
         }
-        const play = spawn("aplay", args, {
-          stdio: ["ignore", "ignore", "ignore"],
-        });
-        play.on("error", (err) => {
-          console.warn("TTS (edge aplay) unavailable:", err.message);
-          playAttempt(idx + 1);
-        });
-        play.on("close", (playCode) => {
-          if (playCode && playCode !== 0) {
-            console.warn("TTS (edge aplay) exited with code", playCode);
-            setTimeout(() => playAttempt(idx + 1), 220);
-            return;
-          }
-          fs.unlink(wavFile, () => {});
-          fs.unlink(outFile, () => {});
-        });
-      };
-      playAttempt(0);
+        fs.unlink(wavFile, () => {});
+        fs.unlink(outFile, () => {});
+      });
     });
     if (!loggedZhVoice) {
       console.log(`TTS Mandarin engine selected: edge (${voice})`);
@@ -351,8 +446,6 @@ export function speak(text, options = {}) {
   espeak.stdin.end();
 }
 
-const player = playerPkg({ player: "mpg123" });
-
 let startTime = Date.now();
 
 const targetPoseRecord = {
@@ -435,15 +528,19 @@ export const computePoseOffset = (
 /**
  * Plays an audio file from the container's mounted audio directory.
  * @param {string} filename - The name of the file (e.g., 'system_online.mp3')
+ * @param {(err?: Error) => void} [onComplete] - Called when playback finishes or fails (err set on failure)
  */
-export function playSystemAudio(filename) {
-  const filePath = path.join("/app/audios", filename);
+export function playSystemAudio(filename, onComplete) {
+  const filePath = path.join(audioAssetsDir(), filename);
 
-  player.play(filePath, (err) => {
-    if (err) {
-      console.error(`Playback error: ${err.message}`);
-    } else {
-      console.log(`Finished playing: ${filename}`);
-    }
+  if (!fs.existsSync(filePath)) {
+    const msg = `Audio file not found: ${filePath} (set AUDIO_ASSETS_DIR or add the file under server/audios)`;
+    console.error(msg);
+    if (typeof onComplete === "function") onComplete(new Error(msg));
+    return;
+  }
+
+  playFileWithMpg123Attempts(filePath, (err) => {
+    if (typeof onComplete === "function") onComplete(err);
   });
 }

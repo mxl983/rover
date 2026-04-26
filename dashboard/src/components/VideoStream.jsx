@@ -22,7 +22,6 @@ export const VideoStream = ({
   const localStreamRef = useRef(null);
   const retryTimeoutRef = useRef({ video: null, talk: null, listen: null });
   const reconnectInFlightRef = useRef(false);
-  const orientationRetryRef = useRef(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadingPercent, setLoadingPercent] = useState(null);
@@ -283,21 +282,24 @@ export const VideoStream = ({
   }, [startVideoWebRTC, startTalkWebRTC, startListenWebRTC]);
 
   useEffect(() => {
-    const onViewportChange = () => {
-      if (orientationRetryRef.current) clearTimeout(orientationRetryRef.current);
-      orientationRetryRef.current = setTimeout(() => {
-        if (document.hidden) return;
-        void startVideoWebRTC({ showLoader: false });
-      }, 280);
+    const resumeVideoElement = () => {
+      const el = videoRef.current;
+      if (!el) return;
+      const playPromise = el.play?.();
+      if (typeof playPromise?.catch === "function") playPromise.catch(() => {});
     };
-    window.addEventListener("orientationchange", onViewportChange);
-    window.addEventListener("resize", onViewportChange);
+    const onVisibility = () => {
+      if (!document.hidden) resumeVideoElement();
+    };
+    window.addEventListener("orientationchange", resumeVideoElement);
+    window.addEventListener("resize", resumeVideoElement);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("orientationchange", onViewportChange);
-      window.removeEventListener("resize", onViewportChange);
-      if (orientationRetryRef.current) clearTimeout(orientationRetryRef.current);
+      window.removeEventListener("orientationchange", resumeVideoElement);
+      window.removeEventListener("resize", resumeVideoElement);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [startVideoWebRTC]);
+  }, []);
 
   useEffect(() => {
     if (!showBackupView) {

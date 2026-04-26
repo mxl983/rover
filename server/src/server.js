@@ -52,6 +52,8 @@ const STARTUP_TIME = Date.now();
 const BOOT_STARTED_AT_ISO = new Date(STARTUP_TIME).toISOString();
 let LAST_TELEMETRY_WRITE = 0;
 let LAST_HEARTBEAT_WRITE = 0;
+const TELEMETRY_INTERVAL_MS = 2_000;
+const HEARTBEAT_INTERVAL_MS = 2_000;
 
 const GRACE_PERIOD_MS = 2 * 60 * 1000;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -123,12 +125,12 @@ setInterval(() => {
   if (
     Object.keys(health).length &&
     timeSinceStartup > 10_000 &&
-    now - LAST_TELEMETRY_WRITE >= 60_000
+    now - LAST_TELEMETRY_WRITE >= TELEMETRY_INTERVAL_MS
   ) {
     recordTelemetry(health, "health_report_scheduled");
     LAST_TELEMETRY_WRITE = now;
   }
-  if (Object.keys(health).length && now - LAST_HEARTBEAT_WRITE >= 10_000) {
+  if (Object.keys(health).length && now - LAST_HEARTBEAT_WRITE >= HEARTBEAT_INTERVAL_MS) {
     recordRoverHeartbeat({
       phase: timeSinceStartup < 50_000 ? "booting" : "ready",
       bootStartedAt: BOOT_STARTED_AT_ISO,
@@ -141,7 +143,7 @@ setInterval(() => {
     type: "HEALTH_UPDATE",
     data: {
       ...health,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString(),
       ttl: IDLE_TIMEOUT_MS - timeSinceLastPing,
     },
   };
